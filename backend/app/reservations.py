@@ -6,8 +6,8 @@ holds of one order move together, because they share a payment and an expiry
 time. These only release or keep stock, so they lock the order row, not the
 SKU-location rows.
 
-Consuming a hold when stock ships, and late inbound handling, are NOT BUILT YET.
-They arrive with the shipping step.
+Consuming a hold when stock ships is in shipping.py. What happens to a held order
+when its truck is late is NOT BUILT YET, see docs/STATUS.md.
 """
 
 from . import rules

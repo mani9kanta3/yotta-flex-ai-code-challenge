@@ -106,6 +106,28 @@ SELECT is_online, counts_inbound, applies_safety_stock, hold_minutes
 FROM channel WHERE channel_code = %(channel_code)s
 """
 
+# Every truck on the road at t, late or not. An overdue truck stops counting towards
+# ATP, but its stock still physically exists.
+IN_TRANSIT_SQL = """
+SELECT COALESCE(SUM(s.transfer_qty), 0)
+FROM shipment s
+JOIN LATERAL (
+    SELECT e.to_status
+    FROM shipment_event e
+    WHERE e.shipment_id = s.shipment_id AND e.occurred_at <= %(t)s
+    ORDER BY e.occurred_at DESC, e.event_id DESC
+    LIMIT 1
+) latest ON latest.to_status = 'IN_TRANSIT'
+WHERE s.shipment_type = 'TRANSFER' AND s.transfer_sku_id = %(sku_id)s
+"""
+
+NETWORK_ON_HAND_SQL = """
+SELECT (SELECT COALESCE(SUM(on_hand), 0) FROM inventory_balance
+        WHERE sku_id = %(sku_id)s AND snapshot_type = 'OPENING')
+     + (SELECT COALESCE(SUM(quantity), 0) FROM inventory_movement
+        WHERE sku_id = %(sku_id)s AND occurred_at <= %(t)s)
+"""
+
 
 def get_channel(cursor, channel_code):
     cursor.execute(CHANNEL_SQL, {"channel_code": channel_code})
@@ -176,3 +198,13 @@ def get_positions(cursor, sku_id, channel_code, t):
 def network_promisable(positions):
     """Summed after each location's own buffer and safety stock have been taken off."""
     return sum(position["promisable"] for position in positions)
+
+
+def get_in_transit(cursor, sku_id, t):
+    cursor.execute(IN_TRANSIT_SQL, {"sku_id": sku_id, "t": t})
+    return cursor.fetchone()[0]
+
+
+def get_network_on_hand(cursor, sku_id, t):
+    cursor.execute(NETWORK_ON_HAND_SQL, {"sku_id": sku_id, "t": t})
+    return cursor.fetchone()[0]

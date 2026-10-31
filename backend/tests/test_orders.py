@@ -481,7 +481,7 @@ def test_lock_timeout_says_busy_and_writes_nothing(orders_db):
     with holder.cursor() as cursor:
         cursor.execute("SELECT 1 FROM sku_location FOR UPDATE")
 
-        with pytest.raises(orders.OrderBusy):
+        with pytest.raises(orders.StockBusy):
             place([line(1)], lock_timeout_ms=100)
 
     holder.rollback()

@@ -13,6 +13,75 @@ def at(hour, minute=0, second=0):
     return datetime(2026, 3, 1, hour, minute, second)
 
 
+# ------------------------------------------------------------ transfers and returns
+
+def test_truck_can_take_exactly_what_is_free():
+    assert rules.can_ship_transfer(qty=3, sellable=5, reserved=2)
+
+
+def test_truck_cannot_take_stock_held_for_an_order():
+    assert not rules.can_ship_transfer(qty=4, sellable=5, reserved=2)
+
+
+@pytest.mark.parametrize("qty", [0, -1])
+def test_truck_cannot_carry_zero_or_negative(qty):
+    assert not rules.can_ship_transfer(qty=qty, sellable=5, reserved=0)
+
+
+@pytest.mark.parametrize("wanted, sellable, reserved, safety, expected", [
+    (10, 50, 0, 5, 10),   # plenty
+    (10, 12, 0, 5, 7),    # sends what it can spare
+    (10, 5, 0, 5, 0),     # only safety stock left
+    (10, 3, 0, 5, 0),     # below safety stock
+    (10, 20, 12, 5, 3),   # holds come off first
+])
+def test_source_keeps_its_safety_stock_when_asked_for_stock(wanted, sellable, reserved, safety, expected):
+    assert rules.transfer_quantity(wanted, sellable, reserved, safety) == expected
+
+
+def test_truck_on_the_road_can_be_received_after_its_last_event():
+    assert rules.can_receive("IN_TRANSIT", at(8), at(8, 0, 1))
+
+
+@pytest.mark.parametrize("t", [at(7), at(8)])
+def test_truck_cannot_arrive_at_or_before_its_last_event(t):
+    assert not rules.can_receive("IN_TRANSIT", at(8), t)
+
+
+@pytest.mark.parametrize("status", ["CREATED", "RECEIVED", "DELIVERED", "CANCELLED"])
+def test_only_a_truck_on_the_road_can_arrive(status):
+    assert not rules.can_receive(status, at(8), at(9))
+
+
+@pytest.mark.parametrize("supply_type, shipment_state, allowed", [
+    ("ON_HAND", None, True),
+    ("INBOUND", "IN_TRANSIT", False),
+    ("INBOUND", "CREATED", False),
+    ("INBOUND", None, False),
+    ("INBOUND", "RECEIVED", True),
+])
+def test_hold_on_a_truck_waits_for_arrival(supply_type, shipment_state, allowed):
+    assert rules.can_ship_hold(supply_type, shipment_state) == allowed
+
+
+@pytest.mark.parametrize("qty, sold, returned, allowed", [
+    (1, 3, 0, True),
+    (3, 3, 0, True),
+    (4, 3, 0, False),
+    (2, 3, 1, True),
+    (3, 3, 1, False),
+    (1, 3, 3, False),
+    (0, 3, 0, False),
+    (-1, 3, 0, False),
+])
+def test_return_can_never_pass_what_was_sold(qty, sold, returned, allowed):
+    assert rules.can_return(qty, sold, returned) == allowed
+
+
+def test_damaged_return_goes_to_the_blocked_bucket():
+    assert rules.RETURN_BUCKETS == {"GOOD": "SELLABLE", "DAMAGED": "BLOCKED"}
+
+
 # ------------------------------------------------------------ walk-in sales
 
 def test_on_hand_includes_blocked():

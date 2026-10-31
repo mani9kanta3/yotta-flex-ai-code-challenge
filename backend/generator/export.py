@@ -33,9 +33,13 @@ TABLE_COLUMNS = {
                            "effective_from", "effective_to"],
     "inventory_balance": ["balance_id", "sku_id", "location_id", "snapshot_type", "as_of_at",
                           "on_hand", "blocked"],
+    "shipment": ["shipment_id", "shipment_type", "status", "order_id", "from_location_id", "to_location_id",
+                 "created_at", "original_eta_at", "transfer_sku_id", "transfer_qty"],
     "inventory_movement": ["movement_id", "sku_id", "location_id", "movement_type", "stock_bucket",
                            "quantity", "occurred_at", "reason_code", "source_doc", "movement_group_id",
                            "allocation_id", "shipment_id", "related_movement_id"],
+    "shipment_event": ["event_id", "shipment_id", "from_status", "to_status", "occurred_at",
+                       "reason_code", "eta_at"],
 }
 
 
@@ -70,14 +74,22 @@ def channel_rows(channels):
     ]
 
 
+def movement_id_of(row_position):
+    return f"MOV-2026-{row_position + 1:08d}"
+
+
+def shipment_id_of(shipment_index):
+    return f"SHP-2026-{shipment_index + 1:06d}"
+
+
 def movement_rows(ledger):
     """Numbered only here, in time order, so an ID says nothing about how a row was made."""
     rows = []
-    for number, row in enumerate(ledger.movements, start=1):
-        pair_index, movement_type, bucket, quantity, moment, reason, source_doc, group = row
+    for position, row in enumerate(ledger.movements):
+        pair_index, movement_type, bucket, quantity, moment, reason, source_doc, group, shipment_index, related_row = row
         pair = ledger.pairs[pair_index]
         rows.append({
-            "movement_id": f"MOV-2026-{number:08d}",
+            "movement_id": movement_id_of(position),
             "sku_id": pair["sku_id"],
             "location_id": pair["location_id"],
             "movement_type": movement_type,
@@ -88,8 +100,46 @@ def movement_rows(ledger):
             "source_doc": source_doc,
             "movement_group_id": group,
             "allocation_id": None,
-            "shipment_id": None,
-            "related_movement_id": None,
+            "shipment_id": None if shipment_index is None else shipment_id_of(shipment_index),
+            "related_movement_id": None if related_row is None else movement_id_of(related_row),
+        })
+    return rows
+
+
+def shipment_rows(ledger):
+    rows = []
+    for index, shipment in enumerate(ledger.shipments):
+        source = ledger.pairs[shipment["source_index"]]
+        destination = ledger.pairs[shipment["destination_index"]]
+        rows.append({
+            "shipment_id": shipment_id_of(index),
+            "shipment_type": "TRANSFER",
+            "status": shipment["status"],
+            "order_id": None,
+            "from_location_id": source["location_id"],
+            "to_location_id": destination["location_id"],
+            "created_at": shipment["shipped_at"],
+            "original_eta_at": shipment["original_eta_at"],
+            "transfer_sku_id": source["sku_id"],
+            "transfer_qty": shipment["qty"],
+        })
+    return rows
+
+
+def shipment_event_rows(ledger):
+    """A sort that keeps ties in the order written, so CREATED stays before IN_TRANSIT."""
+    ordered = sorted(ledger.shipment_events, key=lambda event: (event[0], event[1]))
+    rows = []
+    for number, event in enumerate(ordered, start=1):
+        moment, shipment_index, from_status, to_status, reason, eta_at = event
+        rows.append({
+            "event_id": number,
+            "shipment_id": shipment_id_of(shipment_index),
+            "from_status": from_status,
+            "to_status": to_status,
+            "occurred_at": moment,
+            "reason_code": reason,
+            "eta_at": eta_at,
         })
     return rows
 

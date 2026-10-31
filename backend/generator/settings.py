@@ -24,8 +24,8 @@ SCALES = {
 # Parts of the brief this generator doesn't produce yet. The manifest and the
 # validator both print this, so a pass can't be read as covering them.
 NOT_GENERATED_YET = [
-    "orders", "order lines", "reservations", "allocations", "shipments", "transfers",
-    "returns", "labelled anomalies", "ground truth",
+    "orders", "order lines", "reservations", "allocations", "customer shipments",
+    "returns of online orders", "labelled anomalies", "ground truth",
 ]
 
 # Roughly how many variants a product has.
@@ -57,6 +57,18 @@ ADJUSTMENT_SHARE = 0.02
 # Damaged stock is inspected this many days later.
 INSPECTION_DAYS = (5, 15)
 UNBLOCK_CHANCE = 0.4
+
+# Some trucks miss their ETA, and the new ETA is known an hour after the old one passes.
+TRANSFER_LATE_CHANCE = 0.08
+TRANSFER_DELAY_DAYS = (1, 3)
+ETA_MISSED_NOTICE_HOURS = 1
+
+# About 1 walk-in sale in 17 comes back, most of it in good condition.
+RETURN_CHANCE = 0.06
+RETURN_DAYS = (1, 20)
+RETURN_DAMAGED_CHANCE = 0.15
+# When only part of a sale comes back, sometimes the rest follows later.
+SECOND_RETURN_CHANCE = 0.3
 
 # Estimated walk-in units in the ledger per movement. Only used to size stock.
 UNITS_PER_MOVEMENT = 1.0

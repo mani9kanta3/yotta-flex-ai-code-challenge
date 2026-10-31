@@ -33,13 +33,17 @@ DROP SEQUENCE IF EXISTS order_number;
 DROP SEQUENCE IF EXISTS allocation_number;
 DROP SEQUENCE IF EXISTS decision_number;
 DROP SEQUENCE IF EXISTS event_number;
+DROP SEQUENCE IF EXISTS shipment_number;
+DROP SEQUENCE IF EXISTS movement_number;
 
--- Numbers for orders placed while the system runs. Two transactions can never
+-- Numbers for records written while the system runs. Two transactions can never
 -- get the same value, and neither has to wait for the other to get one.
 CREATE SEQUENCE order_number;
 CREATE SEQUENCE allocation_number;
 CREATE SEQUENCE decision_number;
 CREATE SEQUENCE event_number;
+CREATE SEQUENCE shipment_number;
+CREATE SEQUENCE movement_number;
 
 
 -- ------------------------------------------------------------ master data
@@ -184,6 +188,7 @@ CREATE TABLE shipment (
     original_eta_at     TIMESTAMP,
     transfer_sku_id     VARCHAR(10),
     transfer_qty        INTEGER CHECK (transfer_qty > 0),
+    CHECK (from_location_id <> to_location_id),
     -- A customer shipment belongs to an order, and a transfer has one SKU.
     CHECK (
         (shipment_type = 'CUSTOMER' AND order_id IS NOT NULL AND to_location_id IS NULL
@@ -264,7 +269,12 @@ CREATE TABLE inventory_movement (
                                           OR (stock_bucket = 'SELLABLE' AND quantity > 0)))
         OR (movement_type = 'WRITE_OFF' AND stock_bucket = 'BLOCKED'  AND quantity < 0)
     ),
-    CHECK ((movement_type IN ('BLOCK', 'UNBLOCK')) = (movement_group_id IS NOT NULL))
+    CHECK ((movement_type IN ('BLOCK', 'UNBLOCK')) = (movement_group_id IS NOT NULL)),
+    -- A return always names its sale, and nothing else may. That it really is a
+    -- sale and not over-returned needs other rows, so returns.py and the validator
+    -- check those.
+    CHECK ((movement_type = 'RETURN') = (related_movement_id IS NOT NULL)),
+    CHECK (movement_type NOT IN ('TRANSFER_OUT', 'TRANSFER_IN') OR shipment_id IS NOT NULL)
 );
 
 

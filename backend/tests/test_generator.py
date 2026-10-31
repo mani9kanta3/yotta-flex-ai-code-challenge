@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 import pytest
 
 from app import config
-from generator import export, master, simulate
+from generator import export, master, settings, simulate
 from scripts.generate import generate
 from tests.conftest import TEST_SEED, tiny_scale
 
@@ -144,6 +144,328 @@ def test_unblock_puts_stock_back_without_changing_the_total():
 
     assert ledger.sellable[0] == 10
     assert ledger.blocked[0] == 0
+
+
+# ------------------------------------------------------------ transfers
+
+def three_level_ledger(target_rows=50, ndc_stock=100, warehouse_stock=100, store_stock=0):
+    """One SKU at a store, its warehouse and the NDC, with stock we choose."""
+    scale = tiny_scale()
+    rng = random.Random(TEST_SEED)
+    _products, skus = master.build_products_and_skus(rng, scale)
+    locations = master.build_locations(rng, scale)
+    sku = next(s for s in skus if s["status"] == "ACTIVE" and s["effective_from"] < date(2026, 1, 1))
+    store = next(l for l in locations if l["location_type"] == "STORE")
+    store["opened_on"] = date(2021, 1, 1)
+    warehouse = next(l for l in locations if l["location_id"] == store["parent_location_id"])
+    ndc = next(l for l in locations if l["location_type"] == "NDC")
+
+    pairs = [master.make_pair(sku, store, 1.0), master.make_pair(sku, warehouse, 1.0), master.make_pair(sku, ndc, 1.0)]
+    master.build_rules(pairs)
+    for pair, opening in zip(pairs, (store_stock, warehouse_stock, ndc_stock)):
+        pair["opening_on_hand"] = opening
+        pair["opening_blocked"] = 0
+    return simulate.Ledger(rng, pairs, target_rows), pairs
+
+
+STORE, WAREHOUSE, THE_NDC = 0, 1, 2
+SHIPPED = datetime(2026, 3, 1, 10)
+DUE = datetime(2026, 3, 3, 12)
+
+
+def test_truck_takes_stock_from_the_source_and_gives_it_to_nobody_until_it_arrives():
+    ledger, _pairs = three_level_ledger()
+    total_before = ledger.sellable[STORE] + ledger.sellable[WAREHOUSE]
+
+    index = ledger.ship_transfer(WAREHOUSE, STORE, 10, SHIPPED, DUE)
+
+    assert ledger.sellable[WAREHOUSE] == 90
+    assert ledger.sellable[STORE] == 0
+    assert ledger.sellable[STORE] + ledger.sellable[WAREHOUSE] + ledger.shipments[index]["qty"] == total_before
+
+    ledger.arrive(index, DUE)
+
+    assert ledger.sellable[WAREHOUSE] == 90
+    assert ledger.sellable[STORE] == 10
+    assert ledger.sellable[STORE] + ledger.sellable[WAREHOUSE] == total_before
+    assert [row[1] for row in ledger.movements] == ["TRANSFER_OUT", "TRANSFER_IN"]
+
+
+def test_truck_cannot_take_more_than_the_source_has_and_writes_nothing():
+    ledger, _pairs = three_level_ledger(warehouse_stock=5)
+    assert ledger.ship_transfer(WAREHOUSE, STORE, 6, SHIPPED, DUE) is None
+    assert ledger.movements == []
+    assert ledger.shipments == []
+    assert ledger.sellable[WAREHOUSE] == 5
+
+
+def test_truck_cannot_take_stock_held_for_an_order():
+    ledger, _pairs = three_level_ledger(warehouse_stock=5)
+    ledger.reserved[WAREHOUSE] = 4
+    assert ledger.ship_transfer(WAREHOUSE, STORE, 2, SHIPPED, DUE) is None
+
+
+def test_truck_cannot_arrive_twice():
+    ledger, _pairs = three_level_ledger()
+    index = ledger.ship_transfer(WAREHOUSE, STORE, 10, SHIPPED, DUE)
+    ledger.arrive(index, DUE)
+    with pytest.raises(RuntimeError, match="can't receive"):
+        ledger.arrive(index, DUE + timedelta(days=1))
+    assert ledger.sellable[STORE] == 10
+
+
+def test_truck_cannot_arrive_before_it_left():
+    ledger, _pairs = three_level_ledger()
+    index = ledger.ship_transfer(WAREHOUSE, STORE, 10, SHIPPED, DUE)
+    with pytest.raises(RuntimeError, match="can't receive"):
+        ledger.arrive(index, SHIPPED)
+    assert ledger.sellable[STORE] == 0
+
+
+def test_store_reorders_from_its_warehouse_and_warehouse_from_the_ndc():
+    ledger, _pairs = three_level_ledger(target_rows=50, warehouse_stock=100, ndc_stock=500)
+    today = date(2026, 3, 1)
+
+    ledger.maybe_reorder(STORE, today)
+
+    shipment = ledger.shipments[0]
+    assert (shipment["source_index"], shipment["destination_index"]) == (WAREHOUSE, STORE)
+    assert ledger.on_order[STORE]
+
+    ledger.sellable[WAREHOUSE] = 1
+    ledger.maybe_reorder(WAREHOUSE, today)
+    assert (ledger.shipments[-1]["source_index"], ledger.shipments[-1]["destination_index"]) == (THE_NDC, WAREHOUSE)
+
+
+def test_only_the_ndc_buys_from_a_supplier():
+    ledger, _pairs = three_level_ledger(ndc_stock=0)
+    ledger.maybe_reorder(THE_NDC, date(2026, 3, 1))
+    assert ledger.shipments == []
+    assert ledger.on_order[THE_NDC]
+    action = next(iter(ledger.scheduled.values()))[0][0]
+    assert action == "RECEIPT"
+
+
+def test_empty_source_sends_no_truck_and_refills_itself():
+    ledger, _pairs = three_level_ledger(warehouse_stock=0, ndc_stock=0)
+    ledger.maybe_reorder(STORE, date(2026, 3, 1))
+
+    assert ledger.shipments == []
+    assert ledger.movements == []
+    assert not ledger.on_order[STORE]
+    assert ledger.counters["transfers_short_of_stock"] == 2
+    assert ledger.on_order[THE_NDC]
+
+
+def test_truck_due_after_the_data_ends_stays_in_transit_with_one_row():
+    ledger, _pairs = three_level_ledger()
+    ledger.clock = datetime(2026, 9, 30, 10)
+    ledger.maybe_reorder(STORE, date(2026, 9, 30))
+
+    assert [row[1] for row in ledger.movements] == ["TRANSFER_OUT"]
+    assert ledger.pending_rows == 0
+    assert ledger.shipments[0]["status"] == "IN_TRANSIT"
+
+
+def test_arrival_is_promised_in_the_budget():
+    ledger, _pairs = three_level_ledger(target_rows=10)
+    ledger.maybe_reorder(STORE, date(2026, 3, 1))
+    assert len(ledger.movements) == 1
+    assert ledger.pending_rows == 1
+    assert ledger.free_rows() == 8
+
+
+def test_no_truck_when_the_budget_cannot_hold_both_rows():
+    ledger, _pairs = three_level_ledger(target_rows=1)
+    ledger.maybe_reorder(STORE, date(2026, 3, 1))
+    assert ledger.movements == []
+    assert ledger.counters["reorders_skipped_no_budget"] == 1
+
+
+def test_late_truck_records_a_new_eta_and_keeps_the_first():
+    ledger, _pairs = three_level_ledger()
+    index = ledger.ship_transfer(WAREHOUSE, STORE, 10, SHIPPED, DUE)
+    new_eta = DUE + timedelta(days=2)
+
+    ledger.miss_eta(index, new_eta)
+
+    assert ledger.shipments[index]["original_eta_at"] == DUE
+    event = ledger.shipment_events[-1]
+    assert (event[2], event[3], event[4], event[5]) == ("IN_TRANSIT", "IN_TRANSIT", "ETA_MISSED", new_eta)
+    assert event[0] > DUE
+
+
+def test_generated_transfers_balance_for_every_sku():
+    """Everything that left either arrived or is still on the road. Nothing else."""
+    ledger = build_ledger()
+    moved = {}
+    for row in ledger.movements:
+        if row[1] in ("TRANSFER_OUT", "TRANSFER_IN"):
+            sku_id = ledger.pairs[row[0]]["sku_id"]
+            moved[sku_id] = moved.get(sku_id, 0) + row[3]
+    for shipment in ledger.shipments:
+        if shipment["status"] == "IN_TRANSIT":
+            sku_id = ledger.pairs[shipment["source_index"]]["sku_id"]
+            moved[sku_id] = moved.get(sku_id, 0) + shipment["qty"]
+
+    assert ledger.shipments
+    assert set(moved.values()) == {0}
+
+
+def test_network_stock_follows_only_outside_changes():
+    """A transfer moves stock around, so it must not change the network total."""
+    ledger = build_ledger()
+    outside = sum(row[3] for row in ledger.movements if row[1] not in ("TRANSFER_OUT", "TRANSFER_IN"))
+    opening = sum(pair["opening_on_hand"] for pair in ledger.pairs)
+    closing = sum(ledger.sellable.values()) + sum(ledger.blocked.values())
+    on_the_road = sum(s["qty"] for s in ledger.shipments if s["status"] == "IN_TRANSIT")
+
+    assert closing + on_the_road == opening + outside
+
+
+def test_every_generated_shipment_has_its_rows_in_the_right_order():
+    ledger = build_ledger()
+    rows_by_shipment = {}
+    for row in ledger.movements:
+        if row[8] is not None:
+            rows_by_shipment.setdefault(row[8], []).append(row)
+
+    for index, shipment in enumerate(ledger.shipments):
+        rows = rows_by_shipment[index]
+        assert rows[0][1] == "TRANSFER_OUT"
+        assert rows[0][0] == shipment["source_index"]
+        assert rows[0][3] == -shipment["qty"]
+        if shipment["status"] == "RECEIVED":
+            assert [row[1] for row in rows] == ["TRANSFER_OUT", "TRANSFER_IN"]
+            assert rows[1][0] == shipment["destination_index"]
+            assert rows[1][3] == shipment["qty"]
+            assert rows[1][4] > rows[0][4]
+        else:
+            assert len(rows) == 1
+
+
+def test_shipment_events_are_exported_in_a_legal_order():
+    ledger = build_ledger()
+    by_shipment = {}
+    for row in export.shipment_event_rows(ledger):
+        by_shipment.setdefault(row["shipment_id"], []).append(row)
+
+    assert by_shipment
+    for events in by_shipment.values():
+        previous = None
+        for event in events:
+            assert event["from_status"] == previous
+            previous = event["to_status"]
+            assert event["occurred_at"] <= config.AS_OF
+
+
+# ------------------------------------------------------------ returns
+
+def sold_ledger(qty=3):
+    ledger, _pairs = three_level_ledger(store_stock=10)
+    ledger.sell_walk_in(STORE, qty, datetime(2026, 3, 1, 10))
+    return ledger, len(ledger.movements) - 1
+
+
+RETURNED = datetime(2026, 3, 5, 10)
+
+
+def test_good_return_goes_back_on_the_shelf_and_names_its_sale():
+    ledger, sale_row = sold_ledger(qty=3)
+    assert ledger.return_goods(sale_row, 2, "GOOD", RETURNED)
+
+    row = ledger.movements[-1]
+    assert (row[0], row[1], row[2], row[3], row[9]) == (STORE, "RETURN", "SELLABLE", 2, sale_row)
+    assert ledger.sellable[STORE] == 9
+    assert ledger.blocked[STORE] == 0
+
+
+def test_damaged_return_is_on_hand_but_not_sellable():
+    ledger, sale_row = sold_ledger(qty=3)
+    assert ledger.return_goods(sale_row, 2, "DAMAGED", RETURNED)
+
+    assert ledger.movements[-1][2] == "BLOCKED"
+    assert ledger.sellable[STORE] == 7
+    assert ledger.blocked[STORE] == 2
+
+
+def test_cannot_return_more_than_was_sold_and_writes_no_row():
+    ledger, sale_row = sold_ledger(qty=3)
+    rows_before = len(ledger.movements)
+    assert not ledger.return_goods(sale_row, 4, "GOOD", RETURNED)
+    assert len(ledger.movements) == rows_before
+    assert ledger.sellable[STORE] == 7
+    assert ledger.counters["returns_refused"] == 1
+
+
+def test_parts_of_a_sale_cannot_add_up_to_more_than_was_sold():
+    ledger, sale_row = sold_ledger(qty=3)
+    assert ledger.return_goods(sale_row, 2, "GOOD", RETURNED)
+    assert not ledger.return_goods(sale_row, 2, "GOOD", RETURNED + timedelta(days=1))
+    assert ledger.return_goods(sale_row, 1, "GOOD", RETURNED + timedelta(days=2))
+    assert not ledger.return_goods(sale_row, 1, "GOOD", RETURNED + timedelta(days=3))
+    assert ledger.sellable[STORE] == 10
+
+
+def test_cannot_return_against_a_row_that_is_not_a_sale():
+    ledger, _pairs = three_level_ledger(store_stock=10)
+    ledger.receive(STORE, 5, datetime(2026, 3, 1, 10))
+    assert not ledger.return_goods(0, 1, "GOOD", RETURNED)
+    assert ledger.counters["returns_refused"] == 1
+
+
+@pytest.mark.parametrize("qty", [0, -1])
+def test_zero_or_negative_return_is_refused(qty):
+    ledger, sale_row = sold_ledger(qty=3)
+    assert not ledger.return_goods(sale_row, qty, "GOOD", RETURNED)
+
+
+def test_every_generated_return_names_an_earlier_sale_at_the_same_place():
+    """Checked from the rows alone, separately from the simulator's own running count."""
+    ledger = build_ledger()
+    returned = {}
+    for row in ledger.movements:
+        if row[1] != "RETURN":
+            assert row[9] is None
+            continue
+        sale = ledger.movements[row[9]]
+        assert sale[1] == "SALE"
+        assert sale[0] == row[0]
+        assert sale[4] < row[4]
+        returned[row[9]] = returned.get(row[9], 0) + row[3]
+        assert returned[row[9]] <= -sale[3]
+    assert returned
+
+
+def test_generated_data_includes_a_sale_returned_in_two_parts():
+    """Otherwise the limit on the total would only ever have been tested with one return."""
+    scale = settings.get_scale("starter")
+    rng = random.Random(TEST_SEED)
+    _products, skus = master.build_products_and_skus(rng, scale)
+    locations = master.build_locations(rng, scale)
+    pairs = master.build_pairs(rng, scale, skus, locations)
+    master.build_rules(pairs)
+    master.build_opening_stock(rng, pairs)
+    ledger = simulate.simulate(rng, pairs, scale["movements"])
+
+    counts = {}
+    for row in ledger.movements:
+        if row[1] == "RETURN":
+            counts[row[9]] = counts.get(row[9], 0) + 1
+    assert max(counts.values()) == 2
+
+
+def test_refused_sale_tries_to_reorder_again():
+    """A store that sold out while its warehouse was empty must not stay empty for good."""
+    ledger, _pairs = three_level_ledger(store_stock=0, warehouse_stock=100)
+    stores = simulate.build_store_index(ledger.pairs)
+    store_id = next(iter(stores))
+    day = date(2026, 3, 1)
+
+    simulate.do_walk_in(ledger, stores, [store_id], [1.0], day, datetime(2026, 3, 1, 10))
+
+    assert ledger.counters["walk_in_refused"] == 1
+    assert len(ledger.shipments) == 1
 
 
 # ------------------------------------------------------------ the final top-up

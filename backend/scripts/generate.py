@@ -37,7 +37,9 @@ def generate(scale, seed, out_dir):
         "sku_location": pairs,
         "replenishment_rule": rules,
         "inventory_balance": export.balance_rows(ledger),
+        "shipment": export.shipment_rows(ledger),
         "inventory_movement": export.movement_rows(ledger),
+        "shipment_event": export.shipment_event_rows(ledger),
     }
 
     row_counts = {}

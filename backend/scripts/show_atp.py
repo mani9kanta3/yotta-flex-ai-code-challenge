@@ -25,6 +25,8 @@ def main():
     try:
         with connection.cursor() as cursor:
             positions = atp.get_positions(cursor, args.sku, args.channel, t)
+            network_on_hand = atp.get_network_on_hand(cursor, args.sku, t)
+            in_transit = atp.get_in_transit(cursor, args.sku, t)
     finally:
         connection.close()
 
@@ -36,6 +38,8 @@ def main():
               f"{p['reserved']:>9}{p['inbound']:>8}{p['atp']:>6}{p['safety_stock']:>7}"
               f"{p['buffer_units']:>7}{p['promisable']:>11}")
     print(f"network promisable: {atp.network_promisable(positions)}")
+    print(f"network on hand: {network_on_hand}, on the road: {in_transit}, "
+          f"total stock: {network_on_hand + in_transit}")
 
 
 if __name__ == "__main__":

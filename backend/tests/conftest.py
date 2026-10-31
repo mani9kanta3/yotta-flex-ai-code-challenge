@@ -115,11 +115,24 @@ def add_shipment_event(cursor, shipment_id, from_status, to_status, occurred_at,
     )
 
 
+def close_leftover_connections():
+    """
+    A race test that fails can leave its transaction open. Its locks would make the
+    next test's rebuild wait forever, so one failure would hang the whole run.
+    """
+    connection = db.get_connection("postgres")
+    with connection, connection.cursor() as cursor:
+        cursor.execute("""SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+                          WHERE datname = %s AND pid <> pg_backend_pid()""", (ORDERS_DB,))
+    connection.close()
+
+
 @pytest.fixture
 def orders_db():
     """A clean database with one product, two SKUs and four locations, and no stock yet."""
     require_postgres()
     setup_database.ensure_database(ORDERS_DB)
+    close_leftover_connections()
     setup_database.run_sql_file("schema.sql", ORDERS_DB)
     setup_database.run_sql_file("constraints.sql", ORDERS_DB)
 

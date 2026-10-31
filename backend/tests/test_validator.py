@@ -66,7 +66,9 @@ def test_missing_closing_balance_fails(cursor, loaded_database):
         (sku_id, location_id, config.START_AT),
     )
     results = validate.run_checks(cursor)
-    assert failed_checks(results) == ["stocked pair without a closing balance"]
+    # The network total is built from closing balances, so it notices as well.
+    assert failed_checks(results) == ["stocked pair without a closing balance",
+                                      "network stock plus in transit differs from opening plus outside changes"]
 
 
 def test_missing_opening_balance_fails(cursor):
@@ -152,6 +154,40 @@ def test_table_missing_from_the_manifest_fails(cursor, loaded_database):
     del manifest["files"]["location.csv"]
     failed = failed_checks(validate.check_row_counts(cursor, manifest))
     assert failed == ["row count matches manifest: location"]
+
+
+# ------------------------------------------------------------ rules can't pass on no rows
+
+# SALE is left out because returns point at sales. The empty ledger test below covers it.
+@pytest.mark.parametrize("movement_type", [t for t in validate.GENERATED_MOVEMENT_TYPES if t != "SALE"])
+def test_ledger_with_a_movement_type_missing_fails(cursor, movement_type):
+    cursor.execute("ALTER TABLE inventory_movement DISABLE TRIGGER inventory_movement_append_only")
+    cursor.execute("DELETE FROM inventory_movement WHERE movement_type = %s", (movement_type,))
+    assert failed_checks(validate.check_generated_activity(cursor)) == [
+        f"ledger has movements of type {movement_type}"]
+
+
+def test_empty_ledger_fails_for_every_movement_type(cursor):
+    cursor.execute("TRUNCATE inventory_movement CASCADE")
+    failed = failed_checks(validate.check_generated_activity(cursor))
+    for movement_type in validate.GENERATED_MOVEMENT_TYPES:
+        assert f"ledger has movements of type {movement_type}" in failed
+
+
+def test_no_truck_left_on_the_road_fails(cursor):
+    cursor.execute("UPDATE shipment SET status = 'RECEIVED' WHERE status = 'IN_TRANSIT'")
+    assert failed_checks(validate.check_generated_activity(cursor)) == [
+        "some transfers are still in transit at the end"]
+
+
+def test_no_late_truck_fails(cursor):
+    cursor.execute("ALTER TABLE shipment_event DISABLE TRIGGER shipment_event_append_only")
+    cursor.execute("DELETE FROM shipment_event WHERE reason_code = 'ETA_MISSED'")
+    assert failed_checks(validate.check_generated_activity(cursor)) == ["some transfers missed their ETA"]
+
+
+def test_generated_data_has_all_the_activity(cursor):
+    assert failed_checks(validate.check_generated_activity(cursor)) == []
 
 
 # ------------------------------------------------------------ the exit code

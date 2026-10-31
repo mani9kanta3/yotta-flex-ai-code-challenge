@@ -5,6 +5,8 @@ The "catches" tests break the data on purpose inside a transaction. A validator
 that has only ever passed proves nothing, so these show each check can fail.
 """
 
+from datetime import timedelta
+
 import psycopg2
 import pytest
 
@@ -172,6 +174,199 @@ def test_order_flow_works_on_generated_data(cursor):
     assert atp.network_promisable(atp.get_positions(cursor, sku_id, "WEB", config.AS_OF)) == before - 1
     order_checks = [r for r in validate.run_checks(cursor) if not r["passed"]]
     assert order_checks == []
+
+
+# ------------------------------------------------------------ transfers in the generated data
+
+def received_transfer(cursor):
+    cursor.execute("""SELECT shipment_id, transfer_sku_id, from_location_id, to_location_id, transfer_qty
+                      FROM shipment WHERE status = 'RECEIVED' ORDER BY shipment_id LIMIT 1""")
+    return cursor.fetchone()
+
+
+def in_transit_transfer(cursor):
+    cursor.execute("""SELECT shipment_id, transfer_sku_id, from_location_id, to_location_id, transfer_qty
+                      FROM shipment WHERE status = 'IN_TRANSIT' ORDER BY shipment_id LIMIT 1""")
+    return cursor.fetchone()
+
+
+def add_transfer_row(cursor, movement_id, shipment_id, sku_id, location_id, movement_type, quantity,
+                     occurred_at="2026-09-30 23:00:00"):
+    cursor.execute(
+        """INSERT INTO inventory_movement
+           (movement_id, sku_id, location_id, movement_type, stock_bucket, quantity, occurred_at,
+            reason_code, source_doc, shipment_id)
+           VALUES (%s, %s, %s, %s, 'SELLABLE', %s, %s, 'TEST', %s, %s)""",
+        (movement_id, sku_id, location_id, movement_type, quantity, occurred_at, f"TEST-{movement_id}", shipment_id),
+    )
+
+
+def test_generated_network_stock_plus_in_transit_is_conserved_in_sql(cursor):
+    """Two calculations: this one from the query the live system uses, for every SKU."""
+    from app import atp, config
+    cursor.execute("SELECT DISTINCT transfer_sku_id FROM shipment ORDER BY 1 LIMIT 20")
+    for (sku_id,) in cursor.fetchall():
+        cursor.execute("""SELECT COALESCE(SUM(quantity), 0) FROM inventory_movement
+                          WHERE sku_id = %s AND movement_type NOT IN ('TRANSFER_OUT', 'TRANSFER_IN')""", (sku_id,))
+        outside = cursor.fetchone()[0]
+        cursor.execute("""SELECT SUM(on_hand) FROM inventory_balance
+                          WHERE sku_id = %s AND snapshot_type = 'OPENING'""", (sku_id,))
+        opening = cursor.fetchone()[0]
+        on_hand = atp.get_network_on_hand(cursor, sku_id, config.AS_OF)
+        assert on_hand + atp.get_in_transit(cursor, sku_id, config.AS_OF) == opening + outside
+
+
+def test_generated_truck_counts_on_the_road_only_between_its_two_rows(cursor):
+    from app import atp
+    from app import transfers
+    shipment_id, sku_id, _source, _destination, qty = received_transfer(cursor)
+    cursor.execute("""SELECT occurred_at FROM inventory_movement
+                      WHERE shipment_id = %s ORDER BY occurred_at""", (shipment_id,))
+    (left,), (arrived,) = cursor.fetchall()
+    second = timedelta(seconds=1)
+
+    assert transfers.get_shipment_state(cursor, shipment_id, left - second) is None
+    assert transfers.get_shipment_state(cursor, shipment_id, left) == "IN_TRANSIT"
+    assert transfers.get_shipment_state(cursor, shipment_id, arrived - second) == "IN_TRANSIT"
+    assert transfers.get_shipment_state(cursor, shipment_id, arrived) == "RECEIVED"
+    # Other trucks may carry this SKU too, but this one's units are in the count.
+    assert atp.get_in_transit(cursor, sku_id, left) >= qty
+
+
+def test_live_transfer_after_a_load_does_not_collide_with_generated_ids(cursor):
+    from app import orders
+    cursor.execute("SELECT COUNT(*) FROM inventory_movement")
+    movement_count = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM shipment")
+    shipment_count = cursor.fetchone()[0]
+    cursor.execute("SELECT MAX(event_id) FROM shipment_event")
+    last_event_id = cursor.fetchone()[0]
+
+    assert orders.next_id(cursor, "movement_number") > movement_count
+    assert orders.next_id(cursor, "shipment_number") > shipment_count
+    assert orders.next_id(cursor, "event_number") > last_event_id
+
+
+def test_validator_catches_a_receipt_with_no_arrival_row_behind_it(cursor):
+    shipment_id = in_transit_transfer(cursor)[0]
+    cursor.execute("UPDATE shipment SET status = 'RECEIVED' WHERE shipment_id = %s", (shipment_id,))
+    assert violations(cursor, "received transfer without exactly one matching TRANSFER_IN") == 1
+
+
+def test_validator_catches_an_arrival_while_still_in_transit(cursor):
+    shipment_id, sku_id, _source, destination, qty = in_transit_transfer(cursor)
+    add_transfer_row(cursor, "MOV-2026-99999999", shipment_id, sku_id, destination, "TRANSFER_IN", qty)
+    assert violations(cursor, "transfer still in transit with a TRANSFER_IN already posted") == 1
+    assert violations(cursor, "transfer units that left, arrived or stayed on the road do not add up") == 1
+
+
+def test_validator_catches_a_truck_arriving_twice(cursor):
+    shipment_id, sku_id, _source, destination, qty = received_transfer(cursor)
+    add_transfer_row(cursor, "MOV-2026-99999999", shipment_id, sku_id, destination, "TRANSFER_IN", qty)
+    assert violations(cursor, "received transfer without exactly one matching TRANSFER_IN") == 1
+
+
+def test_validator_catches_a_truck_leaving_twice(cursor):
+    shipment_id, sku_id, source, _destination, qty = received_transfer(cursor)
+    add_transfer_row(cursor, "MOV-2026-99999999", shipment_id, sku_id, source, "TRANSFER_OUT", -qty)
+    assert violations(cursor, "transfer without exactly one matching TRANSFER_OUT") == 1
+
+
+def test_validator_catches_an_arrival_at_the_wrong_location(cursor):
+    shipment_id, sku_id, source, _destination, qty = received_transfer(cursor)
+    add_transfer_row(cursor, "MOV-2026-99999999", shipment_id, sku_id, source, "TRANSFER_IN", qty)
+    assert violations(cursor, "transfer movement that does not belong to its shipment") == 1
+
+
+def test_validator_catches_a_truck_received_before_it_shipped(cursor):
+    shipment_id, sku_id, _source, destination, qty = in_transit_transfer(cursor)
+    add_transfer_row(cursor, "MOV-2026-99999999", shipment_id, sku_id, destination, "TRANSFER_IN", qty,
+                     occurred_at="2026-01-01 00:00:00")
+    assert violations(cursor, "transfer received at or before it shipped") == 1
+
+
+def test_validator_catches_a_shipment_event_out_of_step_with_its_status(cursor):
+    shipment_id = in_transit_transfer(cursor)[0]
+    cursor.execute("UPDATE shipment SET status = 'CANCELLED' WHERE shipment_id = %s", (shipment_id,))
+    assert violations(cursor, "shipment status differs from its latest event") == 1
+
+
+def test_validator_catches_arrival_time_that_differs_from_its_event(cursor):
+    """That gap would be a moment when the truck counts as inbound and as on hand."""
+    shipment_id = received_transfer(cursor)[0]
+    cursor.execute("ALTER TABLE inventory_movement DISABLE TRIGGER inventory_movement_append_only")
+    cursor.execute("""UPDATE inventory_movement SET occurred_at = occurred_at + INTERVAL '1 hour'
+                      WHERE shipment_id = %s AND movement_type = 'TRANSFER_IN'""", (shipment_id,))
+    assert violations(cursor, "TRANSFER_IN time differs from the RECEIVED event") == 1
+
+
+def test_validator_catches_a_lost_truck_in_the_network_total(cursor):
+    shipment_id = in_transit_transfer(cursor)[0]
+    cursor.execute("UPDATE shipment SET status = 'CANCELLED' WHERE shipment_id = %s", (shipment_id,))
+    assert violations(cursor, "network stock plus in transit differs from opening plus outside changes") == 1
+
+
+def test_database_refuses_a_transfer_row_with_no_shipment(cursor):
+    sku_id, location_id, _on_hand, _blocked = stocked_pair(cursor)
+    with pytest.raises(psycopg2.errors.CheckViolation):
+        add_movement(cursor, "MOV-2026-99999999", sku_id, location_id, "TRANSFER_OUT", "SELLABLE", -1)
+
+
+def test_database_refuses_a_transfer_to_the_same_location(cursor):
+    shipment_id, sku_id, source, _destination, qty = received_transfer(cursor)
+    with pytest.raises(psycopg2.errors.CheckViolation):
+        cursor.execute(
+            """INSERT INTO shipment (shipment_id, shipment_type, status, from_location_id, to_location_id,
+                                     created_at, transfer_sku_id, transfer_qty)
+               VALUES ('SHP-2026-999999', 'TRANSFER', 'CREATED', %s, %s, '2026-03-01', %s, %s)""",
+            (source, source, sku_id, qty),
+        )
+
+
+# ------------------------------------------------------------ returns in the generated data
+
+def a_return(cursor):
+    cursor.execute("""SELECT r.movement_id, r.related_movement_id, r.sku_id, r.location_id, r.quantity, s.quantity
+                      FROM inventory_movement r JOIN inventory_movement s ON s.movement_id = r.related_movement_id
+                      WHERE r.movement_type = 'RETURN' ORDER BY r.movement_id LIMIT 1""")
+    return cursor.fetchone()
+
+
+def add_return(cursor, related_id, sku_id, location_id, quantity, occurred_at="2026-09-30 23:00:00"):
+    cursor.execute(
+        """INSERT INTO inventory_movement
+           (movement_id, sku_id, location_id, movement_type, stock_bucket, quantity, occurred_at,
+            reason_code, source_doc, related_movement_id)
+           VALUES ('MOV-2026-99999999', %s, %s, 'RETURN', 'SELLABLE', %s, %s, 'TEST', 'TEST-RET', %s)""",
+        (sku_id, location_id, quantity, occurred_at, related_id),
+    )
+
+
+def test_validator_catches_a_return_of_more_than_was_sold(cursor):
+    _return_id, sale_id, sku_id, location_id, _returned, sold = a_return(cursor)
+    add_return(cursor, sale_id, sku_id, location_id, -sold)
+    assert violations(cursor, "returned more than was sold") == 1
+
+
+def test_validator_catches_a_return_linked_to_something_that_is_not_a_sale(cursor):
+    return_id, _sale_id, sku_id, location_id, _returned, _sold = a_return(cursor)
+    add_return(cursor, return_id, sku_id, location_id, 1)
+    assert violations(cursor, "return not linked to a sale") == 1
+
+
+def test_validator_catches_a_return_at_another_location(cursor):
+    _return_id, sale_id, sku_id, location_id, _returned, _sold = a_return(cursor)
+    cursor.execute("""SELECT location_id FROM sku_location WHERE sku_id = %s AND location_id <> %s
+                      ORDER BY location_id LIMIT 1""", (sku_id, location_id))
+    other_location = cursor.fetchone()[0]
+    add_return(cursor, sale_id, sku_id, other_location, 1)
+    assert violations(cursor, "return at a different SKU or location than its sale") == 1
+
+
+def test_validator_catches_a_return_before_its_sale(cursor):
+    _return_id, sale_id, sku_id, location_id, _returned, _sold = a_return(cursor)
+    add_return(cursor, sale_id, sku_id, location_id, 1, occurred_at="2026-01-01 00:00:00")
+    assert violations(cursor, "return at or before its sale") == 1
 
 
 def test_block_pair_leaves_total_stock_unchanged_in_sql(cursor):

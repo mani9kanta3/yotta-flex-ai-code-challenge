@@ -65,6 +65,18 @@ CREATE INDEX order_line_order ON order_line (order_id);
 CREATE INDEX allocation_line ON order_allocation (order_line_id);
 CREATE INDEX movement_allocation ON inventory_movement (allocation_id);
 CREATE INDEX shipment_transfer_destination ON shipment (to_location_id, transfer_sku_id);
+CREATE INDEX shipment_transfer_sku ON shipment (transfer_sku_id);
+CREATE INDEX movement_shipment ON inventory_movement (shipment_id);
+CREATE INDEX movement_related ON inventory_movement (related_movement_id);
+
+-- Live records carry on numbering after the loaded ones. Otherwise the first
+-- transfer shipped after a load would collide with a generated ID.
+SELECT setval('shipment_number',
+              COALESCE((SELECT MAX(RIGHT(shipment_id, 6)::BIGINT) FROM shipment), 0) + 1, FALSE);
+SELECT setval('movement_number',
+              COALESCE((SELECT MAX(RIGHT(movement_id, 8)::BIGINT) FROM inventory_movement), 0) + 1, FALSE);
+SELECT setval('event_number',
+              COALESCE((SELECT MAX(event_id) FROM shipment_event), 0) + 1, FALSE);
 
 -- A bulk load leaves the planner with no row statistics until this runs. At full
 -- scale it took the ATP query for the most stocked SKU from 881 ms to 295 ms.

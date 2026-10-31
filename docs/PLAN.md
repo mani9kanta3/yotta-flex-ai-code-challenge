@@ -256,8 +256,11 @@ A reservation has `supply_type` ON_HAND or INBOUND, and it is never a mix of bot
 2. **Promised date.** `promised_ship_by` is stored on the reservation:
    ON_HAND uses `placed_at + 24h`, INBOUND uses `current ETA + 24h`.
 3. **Shipping waits.** An INBOUND reservation can't ship until its shipment is
-   RECEIVED. Arrival triggers the shipping step, oldest reservation first, and a
-   SALE can't post before the TRANSFER_IN.
+   RECEIVED at the time being asked about. After a truck is received,
+   `ship_waiting_orders` ships the paid orders on it, oldest first, and a SALE can't
+   post before the TRANSFER_IN. All the holds of an order ship together, so one line
+   on a truck holds up the whole order. **Tradeoff:** one parcel per location, but
+   a customer can wait longer for the items already on the shelf.
 4. **Late arrival.** When the ETA passes without arrival:
    - The shipment gets a new event with status IN_TRANSIT, reason ETA_MISSED and a
      new ETA.
@@ -353,7 +356,16 @@ position      = on_hand - blocked - reserved + all in-transit to this location
 Reorder when `position <= reorder_point`. Lead times: store from warehouse 2 days,
 warehouse from NDC 3, NDC from supplier 7.
 
-### Transfers
+**As built:** the simulator keeps one yes-or-no `on_order` flag per pair in place of
+adding up in-transit stock, so a pair has one reorder out at a time. A truck leaves the
+moment the reorder fires. The source keeps its own safety stock back and sends what it
+can spare, and if it can spare nothing, no truck leaves and the source is asked to refill
+itself. A refused walk-in sale asks again, so a store can't stay empty for good.
+
+**Changed:** the plan said to use `heapq` for an event queue. A dict of days holds the
+same promises with less to explain, and every event here only needs to know its day.
+
+### Transfers (changed)
 
 TRANSFER_OUT posts at `shipped_at` and reduces the source. The stock is then at neither
 location. TRANSFER_IN posts at `received_at` and adds to the destination.
@@ -362,6 +374,49 @@ location. TRANSFER_IN posts at `received_at` and adds to the destination.
 network on_hand + in_transit
     = opening + receipts - sales + returns + adjustments - write-offs
 ```
+
+**Why nothing is counted twice:**
+
+| Moment | Source on-hand | Destination on-hand | Destination inbound | On the road |
+|---|---|---|---|---|
+| Before it ships | 10 | 0 | 0 | 0 |
+| From `shipped_at` | 6 | 0 | 4 | 4 |
+| From `received_at` | 6 | 4 | 0 | 0 |
+
+The TRANSFER_IN row and the RECEIVED event share one timestamp and one transaction. Inbound
+reads the event and on-hand reads the row, and both ask "up to time t", so at any t the truck
+is one or the other. The validator checks the two timestamps are equal.
+
+Inbound is a promise rule and on the road is a physical fact, so they can differ. A truck due
+beyond 24 hours, or overdue, stops counting as inbound but is still on the road, so the total
+above still adds up. A truck due after the data ends just stays IN_TRANSIT, with no TRANSFER_IN.
+
+Shipping a truck takes the same lock as placing an order, because both reduce what the source
+can promise. A truck can't take stock held for an order or blocked stock. Receiving locks the
+shipment row, so two people receiving one truck add the stock once. A truck can't arrive at
+or before its last recorded event, which is what stops the live code ever making the
+`TRANSFER_DOUBLE_COUNTED` anomaly.
+
+**Tradeoff:** the source's stock leaves at the moment of the reorder, with no picking or
+loading time. That is simple, but real warehouses have a gap there.
+
+### Returns (changed)
+
+```
+total returned for a sale <= quantity sold
+```
+
+- A RETURN row always names its SALE in `related_movement_id`. The database refuses a return
+  with no link, and a link on any other movement type.
+- That the linked row really is a SALE, and the total, need other rows, so a CHECK can't see
+  them. `returns.py` refuses both, and the validator checks both.
+- It goes back to the location that sold it, strictly after the sale.
+- A good item goes to SELLABLE. A damaged one goes to BLOCKED, so on-hand rises and ATP doesn't.
+  In generated data it then gets the same inspection as other damage.
+- Two returns of one sale could each see room for themselves, so a return takes the
+  SKU-location lock first and only then counts what has come back.
+
+**Tradeoff:** there is no return window, so a sale could come back months later.
 
 ### Expiry
 
@@ -460,8 +515,8 @@ includes them.
 |---|---|---|
 | 1 | Docker, schema, setup, small generator run: master data, opening balances, receipts, walk-in sales, damage, exact count, load, validate, tests | 2.5h |
 | 2 | `rules.py` in full: reserved from events, inbound, ATP, allocation, tests | 1.5h |
-| 3 | Simulator: event queue, transfers, returns, adjustments | 2h |
-| 4 | Simulator: orders, reservations, inbound promises, late arrivals, shipments, events | 3h |
+| 3 | Transfers, returns and shipping in live code, transfers and returns in the simulator | 2h |
+| 4 | Simulator: orders, reservations, inbound promises, customer shipments. Live and simulated: late arrival handling, STORE orders | 3h |
 | 5 | Injection, ground truth, final numbering | 1h |
 | 6 | Full validator, data dictionary, manifest | 1.5h |
 | 7 | Full 1M run, tuning, reproducibility | 1h |
@@ -515,13 +570,17 @@ Django.
 | `backend/app/rules.py` | Pure stock, ATP and allocation rules | Built |
 | `backend/app/atp.py` | ATP in SQL, as of any time | Built |
 | `backend/app/orders.py` | Place an order with the locking in section 5 | Online orders built, STORE not built |
-| `backend/app/reservations.py` | Confirm, cancel, expire | Built, shipping not built |
+| `backend/app/reservations.py` | Confirm, cancel, expire | Built |
+| `backend/app/movements.py` | Writes one ledger row | Built |
+| `backend/app/transfers.py` | Ship, delay and receive a truck | Built |
+| `backend/app/shipping.py` | Ship a paid order, wait for its truck | Built, delivery and late handling not built |
+| `backend/app/returns.py` | A return that names its sale | Built |
 | `backend/app/detect.py` | The four detectors, SQL only | Later |
 | `backend/app/trace.py` | Order to movement chain | Later |
 | `backend/app/main.py` | The API | Later |
 | `backend/generator/settings.py` | Scale presets and ratios | Built |
 | `backend/generator/master.py` | Products to opening balances | Built |
-| `backend/generator/simulate.py` | The ledger, day by day | First part built |
+| `backend/generator/simulate.py` | The ledger, day by day | Built except orders |
 | `backend/generator/inject.py` | Labelled anomalies and decoys | Later |
 | `backend/generator/export.py` | CSV, checksums, manifest | Built |
 | `backend/scripts/generate.py` | The generator command | Built |
@@ -539,7 +598,7 @@ Django.
 
 Libraries are `psycopg2-binary`, `python-dotenv` and `pytest` so far. FastAPI, uvicorn,
 pydantic and httpx join in the API step. No pandas, numpy or Faker, because the standard
-library's `random`, `csv` and `heapq` are enough and easier to explain.
+library's `random` and `csv` are enough and easier to explain.
 
 ## 11. Outcomes and ground truth
 
@@ -600,7 +659,7 @@ Database tests use their own `inventory_test` database and can't touch a real lo
 | Risk | What we do |
 |---|---|
 | Less time than the "72 hours" suggests | Sunday 10 PM freeze and the cut list |
-| The simulator is the hardest part to explain | Teach the event queue before writing it |
+| The simulator is the hardest part to explain | No event queue, only a dict of what is due each day |
 | Injected rows damage later rows | Replay safety check; the validator must find only labelled issues |
 | Results look too perfect | Decoys and plain limits in the README |
 

@@ -10,8 +10,8 @@ The order of the steps is the whole point:
        lock holder just reserved.
     4. Decide, write everything, commit. Committing releases the locks.
 
-STORE orders are NOT BUILT YET. They need a SALE movement at the same moment, and
-those are posted in the shipping step.
+STORE orders are NOT BUILT YET. They place no hold and need a SALE movement at the
+same moment. See docs/STATUS.md.
 """
 
 import json
@@ -43,14 +43,32 @@ SELECT GREATEST(
 DEFAULT_LOCK_TIMEOUT_MS = 5000
 
 
-class OrderBusy(Exception):
+class StockBusy(Exception):
     """Couldn't get the locks in time. Nothing was written, so it is safe to try again."""
 
 
 def next_id(cursor, sequence):
-    # The name comes from this file only, never from input.
+    # The name comes from our own code only, never from input.
     cursor.execute(f"SELECT nextval('{sequence}')")
     return cursor.fetchone()[0]
+
+
+def start_locked_transaction(cursor, lock_timeout_ms=DEFAULT_LOCK_TIMEOUT_MS):
+    """
+    Must be the first statement. Reading fresh numbers after a lock depends on this
+    level, so it is stated here rather than left to a server default.
+    """
+    cursor.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
+    cursor.execute("SET LOCAL lock_timeout = %s", (f"{lock_timeout_ms}ms",))
+
+
+def run_in_transaction(connection, work, *args, **kwargs):
+    """One transaction. It all commits, or nothing is written."""
+    try:
+        with connection, connection.cursor() as cursor:
+            return work(cursor, *args, **kwargs)
+    except psycopg2.errors.LockNotAvailable as error:
+        raise StockBusy("these items are busy, please try again") from error
 
 
 def add_order_event(cursor, order_id, order_line_id, from_status, to_status, occurred_at, reason):
@@ -201,14 +219,11 @@ def place_order_in_transaction(cursor, channel_code, customer_ref, ship_to_regio
         if line["qty"] <= 0:
             raise ValueError(f"quantity must be above zero, got {line['qty']}")
 
-    # Must be the first statement. Step 3 depends on this level, so it is stated
-    # here rather than left to a server default.
-    cursor.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
-    cursor.execute("SET LOCAL lock_timeout = %s", (f"{lock_timeout_ms}ms",))
+    start_locked_transaction(cursor, lock_timeout_ms)
 
     channel = atp.get_channel(cursor, channel_code)
     if not channel["is_online"]:
-        raise NotImplementedError("STORE orders are not built yet, they arrive with the shipping step")
+        raise NotImplementedError("STORE orders are not built yet")
 
     # Step 1. Master data only, and no stock numbers are read here.
     wanted = []
@@ -305,10 +320,5 @@ def place_order_in_transaction(cursor, channel_code, customer_ref, ship_to_regio
 
 def place_order(connection, channel_code, customer_ref, ship_to_region, lines, placed_at,
                 lock_timeout_ms=DEFAULT_LOCK_TIMEOUT_MS):
-    """One transaction. It all commits, or nothing is written."""
-    try:
-        with connection, connection.cursor() as cursor:
-            return place_order_in_transaction(cursor, channel_code, customer_ref, ship_to_region,
-                                              lines, placed_at, lock_timeout_ms)
-    except psycopg2.errors.LockNotAvailable as error:
-        raise OrderBusy("these items are busy, please try again") from error
+    return run_in_transaction(connection, place_order_in_transaction, channel_code, customer_ref,
+                              ship_to_region, lines, placed_at, lock_timeout_ms)

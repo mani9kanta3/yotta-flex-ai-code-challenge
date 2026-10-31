@@ -239,3 +239,41 @@ def sorted_pairs(sku_location_pairs):
     the same order, no two transactions can each hold what the other needs.
     """
     return sorted(set(sku_location_pairs))
+
+
+# ------------------------------------------------------------ transfers
+
+def can_ship_transfer(qty, sellable, reserved):
+    """A truck can only take what is on the shelf and not held for an order."""
+    return qty > 0 and qty <= walk_in_available(sellable, reserved)
+
+
+def transfer_quantity(wanted, sellable, reserved, safety_stock):
+    """
+    How much a source sends when a location asks for stock. It keeps its own safety
+    stock back, so one store's reorder can't empty the warehouse for everyone else.
+    """
+    spare = walk_in_available(sellable, reserved) - safety_stock
+    return max(0, min(wanted, spare))
+
+
+def can_receive(status, last_event_at, t):
+    """Only a truck on the road can arrive, and only after everything already recorded."""
+    return can_transition(SHIPMENT_TRANSITIONS, status, "RECEIVED") and t > last_event_at
+
+
+def can_ship_hold(supply_type, shipment_state):
+    """Stock on a truck can't go to a customer until the truck has been received."""
+    return supply_type == "ON_HAND" or shipment_state == "RECEIVED"
+
+
+# ------------------------------------------------------------ returns
+
+# A good item goes back on the shelf. A damaged one is still physically here, so it
+# counts as on hand, but it can't be sold.
+RETURN_BUCKETS = {"GOOD": "SELLABLE", "DAMAGED": "BLOCKED"}
+
+
+def can_return(qty, sold, already_returned):
+    """A sale can come back in parts, but never more in total than was sold."""
+    return qty > 0 and qty <= sold - already_returned
