@@ -132,6 +132,48 @@ def test_validator_catches_a_balance_that_does_not_reconcile(cursor):
     assert violations(cursor, "closing balance does not reconcile to opening plus ledger") == 1
 
 
+def test_sql_stock_at_the_end_equals_the_closing_balance(cursor):
+    """The as-of query has to land on the same number as the stored snapshot."""
+    from app import atp, config
+    cursor.execute("""SELECT sku_id, location_id, on_hand, blocked FROM inventory_balance
+                      WHERE snapshot_type = 'CLOSING' ORDER BY sku_id, location_id""")
+    closing = cursor.fetchall()
+    assert closing
+    for sku_id, location_id, on_hand, blocked in closing:
+        assert atp.get_stock(cursor, sku_id, location_id, config.AS_OF) == (on_hand, blocked)
+
+
+def test_sql_stock_before_anything_happened_equals_the_opening_balance(cursor):
+    from app import atp, config
+    cursor.execute("""SELECT sku_id, location_id, on_hand, blocked FROM inventory_balance
+                      WHERE snapshot_type = 'OPENING' ORDER BY sku_id, location_id LIMIT 50""")
+    for sku_id, location_id, on_hand, blocked in cursor.fetchall():
+        assert atp.get_stock(cursor, sku_id, location_id, config.START_AT) == (on_hand, blocked)
+
+
+def test_order_flow_works_on_generated_data(cursor):
+    """The fixture rolls this back, so the generated data stays as it was."""
+    from app import atp, config, orders
+    cursor.execute("""SELECT r.sku_id FROM inventory_balance b
+                      JOIN replenishment_rule r USING (sku_id, location_id)
+                      JOIN location l USING (location_id)
+                      WHERE b.snapshot_type = 'CLOSING' AND l.location_type = 'WAREHOUSE'
+                        AND b.on_hand - b.blocked > r.safety_stock + 5
+                        AND (r.effective_to IS NULL OR r.effective_to > %s::date)
+                      ORDER BY r.sku_id LIMIT 1""", (config.AS_OF,))
+    sku_id = cursor.fetchone()[0]
+    before = atp.network_promisable(atp.get_positions(cursor, sku_id, "WEB", config.AS_OF))
+
+    order = orders.place_order_in_transaction(
+        cursor, "WEB", "CUST-1", "SOUTH", [{"sku_id": sku_id, "qty": 1}, {"sku_id": sku_id, "qty": before}],
+        config.AS_OF)
+
+    assert [line["status"] for line in order["lines"]] == ["ALLOCATED", "REJECTED"]
+    assert atp.network_promisable(atp.get_positions(cursor, sku_id, "WEB", config.AS_OF)) == before - 1
+    order_checks = [r for r in validate.run_checks(cursor) if not r["passed"]]
+    assert order_checks == []
+
+
 def test_block_pair_leaves_total_stock_unchanged_in_sql(cursor):
     """The two-row BLOCK, checked with the same SUM the formula uses."""
     sku_id, location_id, _on_hand, _blocked = stocked_pair(cursor)

@@ -89,6 +89,17 @@ def test_sale_is_refused_above_stock_and_writes_no_row():
     assert ledger.counters["walk_in_refused"] == 1
 
 
+@pytest.mark.parametrize("qty", [0, -1, -3])
+def test_zero_or_negative_sale_is_refused_and_writes_no_row(qty):
+    ledger, _pairs = small_ledger(target_rows=10, opening_stock=5)
+
+    assert not ledger.sell_walk_in(0, qty, datetime(2026, 3, 1, 10))
+
+    assert ledger.movements == []
+    assert ledger.sellable[0] == 5
+    assert ledger.counters["walk_in_refused"] == 1
+
+
 def test_sale_is_refused_when_stock_is_held_by_a_reservation():
     ledger, _pairs = small_ledger(target_rows=10, opening_stock=5)
     ledger.reserved[0] = 4

@@ -29,6 +29,18 @@ DROP TABLE IF EXISTS product CASCADE;
 
 DROP FUNCTION IF EXISTS refuse_change();
 
+DROP SEQUENCE IF EXISTS order_number;
+DROP SEQUENCE IF EXISTS allocation_number;
+DROP SEQUENCE IF EXISTS decision_number;
+DROP SEQUENCE IF EXISTS event_number;
+
+-- Numbers for orders placed while the system runs. Two transactions can never
+-- get the same value, and neither has to wait for the other to get one.
+CREATE SEQUENCE order_number;
+CREATE SEQUENCE allocation_number;
+CREATE SEQUENCE decision_number;
+CREATE SEQUENCE event_number;
+
 
 -- ------------------------------------------------------------ master data
 

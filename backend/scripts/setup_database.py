@@ -10,31 +10,32 @@ gives back an empty database.
 from app import config, db
 
 
-def ensure_database():
+def ensure_database(dbname=None):
     """
     Connects to the "postgres" database, because you can't create a database
     from inside itself. CREATE DATABASE also refuses to run in a transaction,
     which is why autocommit is on.
     """
+    dbname = dbname or config.DB_NAME
     connection = db.get_connection("postgres")
     connection.autocommit = True
     try:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (config.DB_NAME,))
+            cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (dbname,))
             if cursor.fetchone():
-                print(f"database {config.DB_NAME} already exists")
+                print(f"database {dbname} already exists")
             else:
-                # The name comes from our own .env, and CREATE DATABASE won't
-                # take a bound parameter.
-                cursor.execute(f"CREATE DATABASE {config.DB_NAME}")
-                print(f"created database {config.DB_NAME}")
+                # The name comes from our own .env or tests, and CREATE DATABASE
+                # won't take a bound parameter.
+                cursor.execute(f"CREATE DATABASE {dbname}")
+                print(f"created database {dbname}")
     finally:
         connection.close()
 
 
-def run_sql_file(file_name):
+def run_sql_file(file_name, dbname=None):
     path = config.DB_DIR / file_name
-    connection = db.get_connection()
+    connection = db.get_connection(dbname)
     try:
         with connection.cursor() as cursor:
             cursor.execute(path.read_text(encoding="utf-8"))

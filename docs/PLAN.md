@@ -236,7 +236,7 @@ what is free on the shelf. That can lose a sale but can't oversell.
 
 ### Allocation order
 
-Rank eligible locations: same region, then warehouse before store, then most
+Rank eligible locations: same region, then warehouse, then NDC, then store, then most
 promisable, then lowest ID. Then try these in order:
 
 1. One location covers the whole line from on-hand stock.
@@ -287,6 +287,14 @@ Two orders must not both take the last unit. The lock target is one row in
    lock holder committed. A number read before the lock is never reused.
 6. Decide, then insert order, lines, reservations, allocations, events and decisions.
 7. `COMMIT`, which releases the locks.
+
+Between steps 5 and 6, the order's time is moved up to the latest event on the locked
+rows if it is earlier. Otherwise an order stamped one second before a hold that already
+committed would look back to before that hold existed, and take the same stock.
+
+Confirm, cancel and expiry only keep or release stock, so they lock the order row
+instead. All the holds of one order move together, because they share a payment and an
+expiry time.
 
 **Why the sort matters:** without it, order A could lock X then wait for Y while order
 B locks Y then waits for X, which is a deadlock. With one global order, everyone asks
@@ -503,10 +511,11 @@ Django.
 | `backend/db/schema.sql` | Tables, PKs, CHECKs, immutability triggers | Built |
 | `backend/db/constraints.sql` | FKs and indexes, added after load | Built |
 | `backend/app/config.py`, `db.py` | Settings and connections | Built |
-| `backend/app/rules.py` | Pure stock rules | First part built |
-| `backend/app/atp.py` | ATP in SQL, as of any time | Later |
-| `backend/app/orders.py` | Place an order with the locking in section 5 | Later |
-| `backend/app/expiry.py` | Writes EXPIRED events | Later |
+| `docs/STATUS.md` | What is built and what isn't | Built |
+| `backend/app/rules.py` | Pure stock, ATP and allocation rules | Built |
+| `backend/app/atp.py` | ATP in SQL, as of any time | Built |
+| `backend/app/orders.py` | Place an order with the locking in section 5 | Online orders built, STORE not built |
+| `backend/app/reservations.py` | Confirm, cancel, expire | Built, shipping not built |
 | `backend/app/detect.py` | The four detectors, SQL only | Later |
 | `backend/app/trace.py` | Order to movement chain | Later |
 | `backend/app/main.py` | The API | Later |
@@ -518,7 +527,8 @@ Django.
 | `backend/scripts/generate.py` | The generator command | Built |
 | `backend/scripts/setup_database.py` | Create database and tables | Built |
 | `backend/scripts/load_data.py` | COPY in parent-first order | Built |
-| `backend/scripts/validate.py` | SQL checks, writes the summary | First part built |
+| `backend/scripts/validate.py` | SQL checks, writes the summary, exits 1 on failure | Built for what is generated so far |
+| `backend/scripts/show_atp.py` | Prints ATP numbers until the API exists | Built |
 | `backend/scripts/compare_runs.py` | Two runs, same seed, compare | Built |
 | `backend/scripts/run_detect.py`, `run_all.py` | Detectors, then everything | Later |
 | `backend/eval/score.py` | Precision, recall, `metrics.json` | Later |

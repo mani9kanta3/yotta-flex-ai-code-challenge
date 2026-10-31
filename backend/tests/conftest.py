@@ -1,38 +1,50 @@
 """
 Shared setup for the tests.
 
-Tests that need PostgreSQL use the loaded_database fixture and skip themselves
-if it isn't reachable, so a fresh clone still gets a clean run. They use their
-own inventory_test database, so they can't touch a real load.
+Tests that need PostgreSQL skip themselves if it isn't reachable, so a fresh
+clone still gets a clean run. They use their own databases, so they can't touch
+a real load.
+
+    loaded_database  generated data, loaded once. Used by read-only and
+                     rolled-back tests.
+    orders_db        a few hand-written rows, rebuilt for every test. The numbers
+                     are exact, and these tests really commit, because a lock only
+                     matters between separate transactions.
 """
 
 import pytest
 import psycopg2
 
 from app import config, db
-from generator import settings
-from scripts import load_data
+from generator import master, settings
+from scripts import load_data, setup_database
 from scripts.generate import generate
 
 config.DB_NAME = "inventory_test"
 
 TEST_SEED = 20261022
+ORDERS_DB = "inventory_test_orders"
 
 
 def tiny_scale():
     return settings.get_scale("starter", skus=60, locations=6, movements=1_500)
 
 
-@pytest.fixture(scope="session")
-def loaded_database(tmp_path_factory):
+def require_postgres():
     try:
         db.get_connection("postgres").close()
     except psycopg2.OperationalError:
         pytest.skip("PostgreSQL is not reachable")
 
+
+@pytest.fixture(scope="session")
+def loaded_database(tmp_path_factory):
+    """Returns the folder the data was generated into."""
+    require_postgres()
     data_dir = tmp_path_factory.mktemp("data")
     generate(tiny_scale(), TEST_SEED, data_dir)
     load_data.load(data_dir)
+    return data_dir
 
 
 @pytest.fixture
@@ -45,3 +57,97 @@ def cursor(loaded_database):
     finally:
         connection.rollback()
         connection.close()
+
+
+# ------------------------------------------------------------ hand-written data
+
+SKU_A = "SKU-000001"
+SKU_B = "SKU-000002"
+NDC = "LOC-000001"
+WAREHOUSE_SOUTH = "LOC-000002"
+WAREHOUSE_NORTH = "LOC-000003"
+STORE_SOUTH = "LOC-000004"
+
+
+def connect():
+    return db.get_connection(ORDERS_DB)
+
+
+def add_stock(cursor, sku_id, location_id, on_hand, blocked=0, safety_stock=0, allow_inbound=True):
+    """A stocked pair, with the opening balance and rule the ATP queries need."""
+    cursor.execute(
+        "INSERT INTO sku_location (sku_id, location_id, ranged_from) VALUES (%s, %s, '2025-06-01')",
+        (sku_id, location_id),
+    )
+    cursor.execute(
+        """INSERT INTO replenishment_rule
+           (rule_id, sku_id, location_id, source_location_id, safety_stock, reorder_point,
+            reorder_qty, lead_time_days, allow_inbound_atp, effective_from)
+           VALUES ('RUL-' || nextval('event_number'), %s, %s, NULL, %s, %s, 10, 2, %s, '2025-06-01')""",
+        (sku_id, location_id, safety_stock, safety_stock, allow_inbound),
+    )
+    cursor.execute(
+        """INSERT INTO inventory_balance
+           (balance_id, sku_id, location_id, snapshot_type, as_of_at, on_hand, blocked)
+           VALUES ('BAL-' || nextval('event_number'), %s, %s, 'OPENING', %s, %s, %s)""",
+        (sku_id, location_id, config.START_AT, on_hand, blocked),
+    )
+
+
+def add_transfer(cursor, shipment_id, sku_id, to_location_id, qty, shipped_at, eta_at):
+    """A truck on the road, with the events the inbound query reads."""
+    cursor.execute(
+        """INSERT INTO shipment (shipment_id, shipment_type, status, from_location_id, to_location_id,
+                                 created_at, original_eta_at, transfer_sku_id, transfer_qty)
+           VALUES (%s, 'TRANSFER', 'IN_TRANSIT', %s, %s, %s, %s, %s, %s)""",
+        (shipment_id, NDC, to_location_id, shipped_at, eta_at, sku_id, qty),
+    )
+    add_shipment_event(cursor, shipment_id, None, "CREATED", shipped_at)
+    add_shipment_event(cursor, shipment_id, "CREATED", "IN_TRANSIT", shipped_at)
+
+
+def add_shipment_event(cursor, shipment_id, from_status, to_status, occurred_at, eta_at=None):
+    cursor.execute(
+        """INSERT INTO shipment_event (event_id, shipment_id, from_status, to_status, occurred_at,
+                                       reason_code, eta_at)
+           VALUES (nextval('event_number'), %s, %s, %s, %s, 'TEST', %s)""",
+        (shipment_id, from_status, to_status, occurred_at, eta_at),
+    )
+
+
+@pytest.fixture
+def orders_db():
+    """A clean database with one product, two SKUs and four locations, and no stock yet."""
+    require_postgres()
+    setup_database.ensure_database(ORDERS_DB)
+    setup_database.run_sql_file("schema.sql", ORDERS_DB)
+    setup_database.run_sql_file("constraints.sql", ORDERS_DB)
+
+    connection = connect()
+    with connection, connection.cursor() as cursor:
+        cursor.execute("""INSERT INTO product VALUES
+            ('PRD-000001', 'Test Shirt', 'APPAREL', 'Brand 01', 'ACTIVE', '2025-06-01')""")
+        for sku_id in (SKU_A, SKU_B):
+            cursor.execute(
+                """INSERT INTO sku VALUES
+                   (%s, 'PRD-000001', 'M', 'Black', 100.00, 'ACTIVE', '2025-06-01', NULL)""",
+                (sku_id,),
+            )
+        cursor.execute("""INSERT INTO location VALUES
+            ('LOC-000001', 'NDC', 'NDC', 'CENTRAL', NULL, TRUE, '2020-01-01', NULL),
+            ('LOC-000002', 'WH South', 'WAREHOUSE', 'SOUTH', 'LOC-000001', TRUE, '2020-01-01', NULL),
+            ('LOC-000003', 'WH North', 'WAREHOUSE', 'NORTH', 'LOC-000001', TRUE, '2020-01-01', NULL),
+            ('LOC-000004', 'Store South', 'STORE', 'SOUTH', 'LOC-000002', TRUE, '2020-01-01', NULL)""")
+        number = 0
+        for code, online, inbound, safety, hold in master.CHANNELS:
+            cursor.execute("INSERT INTO channel VALUES (%s, %s, %s, %s, %s)",
+                           (code, online, inbound, safety, hold))
+            for location_id in (NDC, WAREHOUSE_SOUTH, WAREHOUSE_NORTH, STORE_SOUTH):
+                number += 1
+                # No buffers by default, so "the last unit" really is one unit.
+                cursor.execute(
+                    """INSERT INTO channel_location VALUES (%s, %s, %s, 0, '2025-06-01', NULL)""",
+                    (f"CHL-{number:06d}", code, location_id),
+                )
+    connection.close()
+    return ORDERS_DB

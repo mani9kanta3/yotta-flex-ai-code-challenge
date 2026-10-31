@@ -65,3 +65,7 @@ CREATE INDEX order_line_order ON order_line (order_id);
 CREATE INDEX allocation_line ON order_allocation (order_line_id);
 CREATE INDEX movement_allocation ON inventory_movement (allocation_id);
 CREATE INDEX shipment_transfer_destination ON shipment (to_location_id, transfer_sku_id);
+
+-- A bulk load leaves the planner with no row statistics until this runs. At full
+-- scale it took the ATP query for the most stocked SKU from 881 ms to 295 ms.
+ANALYZE;

@@ -15,6 +15,7 @@ import json
 import platform
 
 from app import config
+from generator import settings
 
 # Parent tables first. load_data.py loads them in this same order.
 TABLE_COLUMNS = {
@@ -152,6 +153,7 @@ def write_manifest(out_dir, scale, seed, row_counts, counters):
                     "city names are ordinary place names, and there is no personal data.",
         },
         "generation_counters": counters,
+        "not_generated_yet": settings.NOT_GENERATED_YET,
         "files": files,
     }
     path = out_dir / "source_manifest.json"

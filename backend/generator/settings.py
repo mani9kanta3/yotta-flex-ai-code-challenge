@@ -21,6 +21,13 @@ SCALES = {
     },
 }
 
+# Parts of the brief this generator doesn't produce yet. The manifest and the
+# validator both print this, so a pass can't be read as covering them.
+NOT_GENERATED_YET = [
+    "orders", "order lines", "reservations", "allocations", "shipments", "transfers",
+    "returns", "labelled anomalies", "ground truth",
+]
+
 # Roughly how many variants a product has.
 SKUS_PER_PRODUCT = 3.3
 

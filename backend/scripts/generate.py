@@ -69,6 +69,7 @@ def main():
     for file_name, info in manifest["files"].items():
         print(f"  {file_name:28} {info['rows']:>10,} rows  {info['sha256'][:12]}")
     print(f"  counters: {manifest['generation_counters']}")
+    print(f"  NOT GENERATED YET: {', '.join(manifest['not_generated_yet'])}")
     print(f"  took {seconds:.1f}s")
 
 
