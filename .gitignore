@@ -1,0 +1,24 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets stay local. .env.example is the one that gets committed.
+.env
+
+# Too large for Git. The generator recreates it with one command.
+backend/data/full/
+
+# Scratch output from reproducibility runs.
+backend/data/compare/
+
+# Frontend
+node_modules/
+dist/
+
+# Editor and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,9 @@
+# Database. psycopg2-binary rather than psycopg2 so there is nothing to
+# compile on Windows.
+psycopg2-binary==2.9.10
+
+# Reads backend/.env
+python-dotenv==1.0.1
+
+# Tests
+pytest==8.3.4
