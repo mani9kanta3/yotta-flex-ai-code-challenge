@@ -67,7 +67,10 @@ export default function Availability({ skuId }) {
           <Panel title="Every term, by location" note={`At ${dateTime(atp.data.as_of)}. Best to promise from first.`}>
             <div className="formula" aria-label="The formula">
               <span>On hand</span><b>−</b><span>Reserved</span><b>−</b><span>Blocked</span><b>+</b><span>Inbound</span><b>=</b><span className="strong">ATP</span>
-              <b>−</b><span>Safety</span><b>−</b><span>Buffer</span><b>=</b><span className="strong">Promisable</span>
+              <span className="formula-break" />
+              <span>ATP</span><b>−</b><span>Inbound this channel can’t sell</span><b>=</b><span className="strong">Channel ATP</span>
+              <span className="formula-break" />
+              <span>Channel ATP</span><b>−</b><span>Safety</span><b>−</b><span>Buffer</span><b>=</b><span className="strong">Promisable</span><span>(never below 0)</span>
             </div>
             {rows.length === 0 && <p className="quiet-note">This channel can’t sell this SKU from any location at that time.</p>}
             {rows.length > 0 && (
@@ -76,7 +79,7 @@ export default function Availability({ skuId }) {
                   <thead>
                     <tr>
                       <th>Location</th><th className="num">On hand</th><th className="num">Reserved</th><th className="num">Blocked</th>
-                      <th className="num">Inbound</th><th className="num">ATP</th><th className="num">Safety</th><th className="num">Buffer</th><th className="num">Promisable</th><th />
+                      <th className="num">Inbound</th><th className="num">ATP</th><th className="num">Channel ATP</th><th className="num">Safety</th><th className="num">Buffer</th><th className="num">Promisable</th><th />
                     </tr>
                   </thead>
                   <tbody>
@@ -91,6 +94,7 @@ export default function Availability({ skuId }) {
                         <td className="num">{number(row.blocked)}</td>
                         <td className="num">{number(row.inbound)}</td>
                         <td className="num strong">{number(row.atp)}</td>
+                        <td className="num">{number(row.channel_atp)}</td>
                         <td className="num">{number(row.safety_stock)}</td>
                         <td className="num">{number(row.buffer_units)}</td>
                         <td className="num strong">{number(row.promisable)}</td>

@@ -1125,6 +1125,16 @@
       "passed": true
     },
     {
+      "check": "replenishment rule versions that overlap",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "channel buffer versions that overlap",
+      "violations": 0,
+      "passed": true
+    },
+    {
       "check": "closing balance does not reconcile to opening plus ledger",
       "violations": 5,
       "passed": false,

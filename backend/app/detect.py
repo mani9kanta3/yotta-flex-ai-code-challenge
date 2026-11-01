@@ -7,78 +7,94 @@ them trusts a status column or a logged decision, and none of them knows what wa
 injected: nothing in app/ reads the answers.
 """
 
-from app import config
+from app import config, rules
 
+# Only movements up to the snapshot's own time, because a later sale doesn't make it wrong.
 BALANCE_SQL = """
 SELECT c.balance_id, o.on_hand + COALESCE(m.total_change, 0), c.on_hand
 FROM inventory_balance c
 JOIN inventory_balance o
   ON o.sku_id = c.sku_id AND o.location_id = c.location_id AND o.snapshot_type = 'OPENING'
-LEFT JOIN (
-    SELECT sku_id, location_id,
-           SUM(quantity) AS total_change,
+LEFT JOIN LATERAL (
+    SELECT SUM(quantity) AS total_change,
            SUM(quantity) FILTER (WHERE stock_bucket = 'BLOCKED') AS blocked_change
-    FROM inventory_movement GROUP BY sku_id, location_id) m
-  ON m.sku_id = c.sku_id AND m.location_id = c.location_id
+    FROM inventory_movement
+    WHERE sku_id = c.sku_id AND location_id = c.location_id AND occurred_at <= c.as_of_at) m ON TRUE
 WHERE c.snapshot_type = 'CLOSING'
   AND (c.on_hand <> o.on_hand + COALESCE(m.total_change, 0)
        OR c.blocked <> o.blocked + COALESCE(m.blocked_change, 0))
 ORDER BY c.balance_id
 """
 
-# What could be promised just before this hold, the same way ATP works it out: stock up
-# to that moment, less blocked, less every other hold then, less safety stock and buffer.
-# An on-hand hold can't lean on a truck, so only a hold on a truck counts what is inbound.
-RESERVATION_SQL = """
-SELECT r.reservation_id,
-       GREATEST(0, stock.on_hand - stock.blocked - others.held + COALESCE(trucks.inbound, 0)
-                   - CASE WHEN ch.applies_safety_stock THEN rule.safety_stock ELSE 0 END - cl.buffer_units),
-       r.qty
-FROM reservation r
-JOIN order_line l USING (order_line_id)
-JOIN orders o USING (order_id)
-JOIN channel ch USING (channel_code)
-JOIN channel_location cl ON cl.channel_code = o.channel_code AND cl.location_id = r.location_id
-JOIN replenishment_rule rule ON rule.sku_id = r.sku_id AND rule.location_id = r.location_id
-JOIN inventory_balance b
-  ON b.sku_id = r.sku_id AND b.location_id = r.location_id AND b.snapshot_type = 'OPENING'
-JOIN LATERAL (
-    SELECT b.on_hand + COALESCE(SUM(m.quantity), 0) AS on_hand,
-           b.blocked + COALESCE(SUM(m.quantity) FILTER (WHERE m.stock_bucket = 'BLOCKED'), 0) AS blocked
-    FROM inventory_movement m
-    WHERE m.sku_id = r.sku_id AND m.location_id = r.location_id AND m.occurred_at <= r.created_at
-) stock ON TRUE
-JOIN LATERAL (
-    SELECT COALESCE(SUM(other.qty), 0) AS held
-    FROM reservation other
+# What could be promised just before this hold, by the same rules as app/atp.py: stock up to
+# that moment, less blocked, less every other hold then, less safety stock and buffer. A truck
+# only counts for a hold on a truck, on a channel and a rule that allow it, while it is on the
+# road and its latest ETA is due within the horizon. A channel or rule not in effect then has
+# nothing to promise.
+RESERVATION_SQL = f"""
+SELECT reservation_id, available, qty FROM (
+    SELECT r.reservation_id, r.qty,
+           CASE WHEN cl.channel_location_id IS NULL OR rule.rule_id IS NULL THEN 0
+                ELSE GREATEST(0, stock.on_hand - stock.blocked - others.held + COALESCE(trucks.inbound, 0)
+                                 - CASE WHEN ch.applies_safety_stock THEN rule.safety_stock ELSE 0 END - cl.buffer_units)
+           END AS available
+    FROM reservation r
+    JOIN order_line l USING (order_line_id)
+    JOIN orders o USING (order_id)
+    JOIN channel ch USING (channel_code)
+    LEFT JOIN channel_location cl
+      ON cl.channel_code = o.channel_code AND cl.location_id = r.location_id
+     AND cl.effective_from <= r.created_at::date AND (cl.effective_to IS NULL OR r.created_at::date < cl.effective_to)
+    LEFT JOIN replenishment_rule rule
+      ON rule.sku_id = r.sku_id AND rule.location_id = r.location_id
+     AND rule.effective_from <= r.created_at::date AND (rule.effective_to IS NULL OR r.created_at::date < rule.effective_to)
+    JOIN inventory_balance b
+      ON b.sku_id = r.sku_id AND b.location_id = r.location_id AND b.snapshot_type = 'OPENING'
     JOIN LATERAL (
-        SELECT e.to_status FROM reservation_event e
-        WHERE e.reservation_id = other.reservation_id AND e.occurred_at <= r.created_at
-        ORDER BY e.occurred_at DESC, e.event_id DESC LIMIT 1
-    ) latest ON TRUE
-    WHERE other.sku_id = r.sku_id AND other.location_id = r.location_id
-      AND other.reservation_id <> r.reservation_id
-      -- Two holds placed in the same second: the first one didn't see the second.
-      AND NOT (other.created_at = r.created_at AND other.reservation_id > r.reservation_id)
-      AND (latest.to_status = 'CONFIRMED' OR (latest.to_status = 'ACTIVE' AND r.created_at < other.expires_at))
-) others ON TRUE
-LEFT JOIN LATERAL (
-    SELECT SUM(truck.transfer_qty) AS inbound
-    FROM shipment truck
+        SELECT b.on_hand + COALESCE(SUM(m.quantity), 0) AS on_hand,
+               b.blocked + COALESCE(SUM(m.quantity) FILTER (WHERE m.stock_bucket = 'BLOCKED'), 0) AS blocked
+        FROM inventory_movement m
+        WHERE m.sku_id = r.sku_id AND m.location_id = r.location_id AND m.occurred_at <= r.created_at
+    ) stock ON TRUE
     JOIN LATERAL (
-        SELECT e.to_status FROM shipment_event e
-        WHERE e.shipment_id = truck.shipment_id AND e.occurred_at <= r.created_at
-        ORDER BY e.occurred_at DESC, e.event_id DESC LIMIT 1
-    ) latest ON latest.to_status = 'IN_TRANSIT'
-    WHERE r.supply_type = 'INBOUND' AND truck.shipment_type = 'TRANSFER'
-      AND truck.transfer_sku_id = r.sku_id AND truck.to_location_id = r.location_id
-) trucks ON TRUE
-WHERE r.status <> 'REJECTED'
-  AND rule.effective_from <= r.created_at::date
-  AND (rule.effective_to IS NULL OR r.created_at::date < rule.effective_to)
-  AND r.qty > GREATEST(0, stock.on_hand - stock.blocked - others.held + COALESCE(trucks.inbound, 0)
-                          - CASE WHEN ch.applies_safety_stock THEN rule.safety_stock ELSE 0 END - cl.buffer_units)
-ORDER BY r.reservation_id
+        SELECT COALESCE(SUM(other.qty), 0) AS held
+        FROM reservation other
+        JOIN LATERAL (
+            SELECT e.to_status FROM reservation_event e
+            WHERE e.reservation_id = other.reservation_id AND e.occurred_at <= r.created_at
+            ORDER BY e.occurred_at DESC, e.event_id DESC LIMIT 1
+        ) latest ON TRUE
+        WHERE other.sku_id = r.sku_id AND other.location_id = r.location_id
+          AND other.reservation_id <> r.reservation_id
+          -- Two holds placed in the same second: the first one didn't see the second.
+          AND NOT (other.created_at = r.created_at AND other.reservation_id > r.reservation_id)
+          AND (latest.to_status = 'CONFIRMED' OR (latest.to_status = 'ACTIVE' AND r.created_at < other.expires_at))
+    ) others ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT SUM(truck.transfer_qty) AS inbound
+        FROM shipment truck
+        JOIN LATERAL (
+            SELECT e.to_status FROM shipment_event e
+            WHERE e.shipment_id = truck.shipment_id AND e.occurred_at <= r.created_at
+            ORDER BY e.occurred_at DESC, e.event_id DESC LIMIT 1
+        ) latest ON latest.to_status = 'IN_TRANSIT'
+        JOIN LATERAL (
+            SELECT COALESCE(
+                (SELECT e.eta_at FROM shipment_event e
+                 WHERE e.shipment_id = truck.shipment_id AND e.occurred_at <= r.created_at AND e.eta_at IS NOT NULL
+                 ORDER BY e.occurred_at DESC, e.event_id DESC LIMIT 1),
+                truck.original_eta_at) AS eta_at
+        ) eta ON TRUE
+        WHERE r.supply_type = 'INBOUND' AND ch.counts_inbound AND rule.allow_inbound_atp
+          AND truck.shipment_type = 'TRANSFER'
+          AND truck.transfer_sku_id = r.sku_id AND truck.to_location_id = r.location_id
+          AND eta.eta_at >= r.created_at
+          AND eta.eta_at <= r.created_at + INTERVAL '{rules.INBOUND_HORIZON_HOURS} hours'
+    ) trucks ON TRUE
+    WHERE r.status <> 'REJECTED'
+) checked
+WHERE qty > available
+ORDER BY reservation_id
 """
 
 # A sale has to come off the shelf. Expected units from blocked stock are always zero.

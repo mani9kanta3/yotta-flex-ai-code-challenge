@@ -33,12 +33,15 @@ def ensure_database(dbname=None):
         connection.close()
 
 
+def read_sql_file(file_name):
+    return (config.DB_DIR / file_name).read_text(encoding="utf-8")
+
+
 def run_sql_file(file_name, dbname=None):
-    path = config.DB_DIR / file_name
     connection = db.get_connection(dbname)
     try:
         with connection.cursor() as cursor:
-            cursor.execute(path.read_text(encoding="utf-8"))
+            cursor.execute(read_sql_file(file_name))
         connection.commit()
     finally:
         connection.close()

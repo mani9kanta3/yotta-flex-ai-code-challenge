@@ -350,7 +350,8 @@ CREATE TABLE inventory_exception (
 -- ------------------------------------------------------------ immutability
 
 -- History can only be added to. The database itself refuses a change, so no
--- bug in Python can rewrite it.
+-- bug in Python can rewrite it. TRUNCATE needs its own trigger, because it skips row triggers.
+-- The owner of a table can still disable these, so they stop mistakes, not an administrator.
 CREATE FUNCTION refuse_change() RETURNS trigger AS $$
 BEGIN
     RAISE EXCEPTION '% is append-only, % refused', TG_TABLE_NAME, TG_OP;
@@ -369,3 +370,16 @@ CREATE TRIGGER reservation_event_append_only BEFORE UPDATE OR DELETE ON reservat
     FOR EACH ROW EXECUTE FUNCTION refuse_change();
 CREATE TRIGGER shipment_event_append_only BEFORE UPDATE OR DELETE ON shipment_event
     FOR EACH ROW EXECUTE FUNCTION refuse_change();
+
+CREATE TRIGGER inventory_movement_no_truncate BEFORE TRUNCATE ON inventory_movement
+    FOR EACH STATEMENT EXECUTE FUNCTION refuse_change();
+CREATE TRIGGER inventory_balance_no_truncate BEFORE TRUNCATE ON inventory_balance
+    FOR EACH STATEMENT EXECUTE FUNCTION refuse_change();
+CREATE TRIGGER allocation_decision_no_truncate BEFORE TRUNCATE ON allocation_decision
+    FOR EACH STATEMENT EXECUTE FUNCTION refuse_change();
+CREATE TRIGGER order_event_no_truncate BEFORE TRUNCATE ON order_event
+    FOR EACH STATEMENT EXECUTE FUNCTION refuse_change();
+CREATE TRIGGER reservation_event_no_truncate BEFORE TRUNCATE ON reservation_event
+    FOR EACH STATEMENT EXECUTE FUNCTION refuse_change();
+CREATE TRIGGER shipment_event_no_truncate BEFORE TRUNCATE ON shipment_event
+    FOR EACH STATEMENT EXECUTE FUNCTION refuse_change();

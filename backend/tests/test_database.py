@@ -72,10 +72,11 @@ def test_location_hierarchy_has_one_root(cursor):
 
 
 @pytest.mark.parametrize("table", APPEND_ONLY_TABLES)
-def test_append_only_table_has_its_trigger(cursor, table):
-    cursor.execute("""SELECT COUNT(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
-                      WHERE NOT t.tgisinternal AND c.relname = %s""", (table,))
-    assert cursor.fetchone()[0] == 1
+def test_append_only_table_has_its_triggers(cursor, table):
+    """One for UPDATE and DELETE, row by row, and one for TRUNCATE, which skips row triggers."""
+    cursor.execute("""SELECT t.tgname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+                      WHERE NOT t.tgisinternal AND c.relname = %s ORDER BY t.tgname""", (table,))
+    assert [row[0] for row in cursor.fetchall()] == [f"{table}_append_only", f"{table}_no_truncate"]
 
 
 # ------------------------------------------------------------ immutability

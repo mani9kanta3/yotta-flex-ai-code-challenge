@@ -62,13 +62,13 @@ export default function Ledger({ skuId, locationId }) {
       {data && (
         <>
           <div className="tiles tiles-four">
-            <Tile label="Opening on hand" value={number(data.opening.on_hand)} note={`${number(data.opening.blocked)} blocked`} />
-            <Tile label="Worked out from the ledger" value={number(data.worked_out_on_hand)} note={`${number(data.worked_out_blocked)} blocked, after ${number(data.total_rows)} rows`} />
-            <Tile label="Stored closing balance" value={data.stored_closing ? number(data.stored_closing.on_hand) : "–"} note={data.stored_closing ? `${number(data.stored_closing.blocked)} blocked` : "None stored"} />
+            <Tile label="On hand now" value={number(data.current_on_hand)} note={`${number(data.current_blocked)} blocked, opened at ${number(data.opening.on_hand)}, ${number(data.total_rows)} rows since`} />
+            <Tile label="Ledger at the closing snapshot" value={number(data.at_snapshot_on_hand)} note={`${number(data.at_snapshot_blocked)} blocked. Opening plus rows up to then`} />
+            <Tile label="Stored closing balance" value={data.stored_closing ? number(data.stored_closing.on_hand) : "–"} note={data.stored_closing ? `${number(data.stored_closing.blocked)} blocked, at ${dateTime(data.stored_closing.as_of_at)}` : "None stored"} />
             <div className="tile">
               <p className="tile-label">Reconciles</p>
               <p className="tile-value"><Verdict good={data.reconciles}>{data.reconciles ? "Yes" : "No"}</Verdict></p>
-              <p className="tile-note">{data.reconciles ? "Opening plus ledger equals the stored balance" : "Differs from the ledger. Live activity after the last snapshot also shows here. ATP keeps using the ledger."}</p>
+              <p className="tile-note">{data.reconciles ? "The ledger at that moment equals the stored balance" : "The stored balance differs from the ledger at that moment. ATP keeps using the ledger."}</p>
             </div>
           </div>
 

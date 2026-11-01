@@ -133,7 +133,7 @@ Bridge: SKU N:M location. Also the row an order locks, so two orders can't take 
 
 ### inventory_balance
 
-Snapshots, never updated, enforced by a trigger.
+Snapshots, never updated, enforced by triggers that refuse UPDATE, DELETE and TRUNCATE.
 
 | Field | Type | Required | Allowed values | Units | Unique | Validation rule |
 |---|---|---|---|---|---|---|
@@ -142,7 +142,7 @@ Snapshots, never updated, enforced by a trigger.
 | location_id | VARCHAR(10) | Yes | A stocked pair with `sku_id` | ID | With `sku_id`, `snapshot_type` | Foreign key to `sku_location` |
 | snapshot_type | VARCHAR(10) | Yes | One of: `OPENING`, `CLOSING` | Code | With `sku_id`, `location_id` | CHECK and validator. Every pair has one of each |
 | as_of_at | TIMESTAMP | Yes | Start of the period for OPENING, end for CLOSING | Date and time | No | Validator |
-| on_hand | INTEGER | Yes | 0 or more | Units | No | CHECK. CLOSING has to equal OPENING plus the ledger |
+| on_hand | INTEGER | Yes | 0 or more | Units | No | CHECK. CLOSING has to equal OPENING plus the ledger up to `as_of_at` |
 | blocked | INTEGER | Yes | 0 up to `on_hand` | Units | No | CHECK. Blocked units are part of on-hand |
 
 ## Orders
@@ -225,7 +225,7 @@ Bridge: order line N:M location. Which location fulfils how much of which line.
 
 ### inventory_movement
 
-Append-only, enforced by a trigger. Each row changes one bucket, so on-hand at any time is the
+Append-only, enforced by triggers that refuse UPDATE, DELETE and TRUNCATE. Each row changes one bucket, so on-hand at any time is the
 opening balance plus the rows up to that time.
 
 | Field | Type | Required | Allowed values | Units | Unique | Validation rule |
@@ -246,7 +246,7 @@ opening balance plus the rows up to that time.
 
 ## Decisions and history
 
-All four tables are append-only, enforced by a trigger.
+All of these except `inventory_exception` are append-only, enforced by triggers that refuse UPDATE, DELETE and TRUNCATE.
 
 ### allocation_decision
 

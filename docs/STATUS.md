@@ -61,7 +61,7 @@ Updated after every step. "Built" means the code exists, it ran, and tests cover
 | Returns | Good and damaged returns in live code and generated data | No return window |
 | React page | Every page, the order flow and truck actions, checked by hand in a browser, in light and dark, and at phone width | No automated browser tests. Tested by hand on the starter data, and opened on the full data |
 | Login | Nothing | There is none. Anyone who can reach the local API can write. It is a local demo of the rules |
-| AI_USAGE.md | What the record shows | The personal parts are left for Manikanta to write |
+| AI_USAGE.md | Implementation and Codex review assistance disclosed; personal section drafted from the conversation record | Manikanta must read the AI-assisted draft and correct anything that does not describe his experience |
 | Live stock changes | Orders, transfers, shipping, returns and late handling take the SKU-location lock | Walk-in sales, BLOCK, UNBLOCK, WRITE_OFF and adjustments exist only in the generator, with no live version |
 | Generated decisions agree with SQL | **At full scale, only a sample of 200 decisions was checked against SQL: 200 of 72,160 on the clean baseline and 200 of 72,360 on the final data.** Every decision was checked at starter scale: all 1,418 on the clean baseline agree, and of all 1,438 on the final data, only the 5 labelled ones differ | More than 72,000 full-scale decisions have not been recalculated. `validate --decisions` can run more, at several queries each |
 | ATP checkpoints | 40 rows at starter and 200 at full, all matching SQL | Only a few moments: 5 events of each of 4 kinds at starter, 25 at full, with a row before and at each |
@@ -72,6 +72,40 @@ Updated after every step. "Built" means the code exists, it ran, and tests cover
 |---|---|
 | STORE orders | Walk-in sales cover the store channel, and the brief doesn't name STORE orders |
 | A deployed site | The brief asks for working code in a repo. It runs locally |
+
+## Review findings
+
+An independent review, in [FINAL_REVIEW.md](FINAL_REVIEW.md), found these in the commit it read. Each
+has tests in `backend/tests/test_review_findings.py` that were run and failed before the fix.
+
+| Finding | What was wrong | What changed |
+|---|---|---|
+| F1, critical | Paying for an old order was dated in the past, so an expired hold could come back after someone else took the stock, with 2 units reserved for 1 | Confirm and cancel now take the same stock locks as a new order and check the time after holding them. The API never dates an action behind the clock |
+| F2, high | The reservation detector counted any truck on the road, whatever its ETA, channel or rule, and the validator reuses it | It follows the same inbound rule as ATP, and a channel or rule not in effect has nothing to promise |
+| F3, high | A valid sale after the closing snapshot looked like a wrong balance | The detector, validator and ledger compare a snapshot with movements up to its own time. Current stock is shown apart |
+| F4, high | "Nothing unrelated changed" only looked at some fields of some tables | All 18 tables are compared, row by row, through the new IDs, so a link to the wrong row fails too |
+| F5, medium | TRUNCATE skipped the append-only triggers | History tables refuse it. The owner can still switch triggers off, so this stops mistakes, not an administrator. No separate restricted role was added |
+| F6, medium | Marketplace promisable didn't follow from the numbers on the page | The page shows Channel ATP as its own step |
+| F7, medium | The database port was open beyond this machine, depending on the network | It is bound to `127.0.0.1`. That alone made every new connection wait 2 seconds on Windows, because `localhost` tries IPv6 first, so the default host is now `127.0.0.1` too |
+| F8, low | The README accepted Node versions the tools refuse | It states 20.19 or 22.12 and later, and uses `npm ci` and `docker compose up -d --wait` |
+| F9, medium | A failed load could leave the database empty or without foreign keys | Files are checked against the manifest first, and the whole load is one transaction |
+| F10, medium | The SQL and JSON exports read everything into memory | They stream row by row. The full export peaked at about 23 MB in samples taken every half second, and took about 55 s |
+
+Also from the review's other notes:
+
+- The traceable badge now checks that the sale matches its hold's SKU, location and quantity.
+- Two new checks fail if rule or buffer versions overlap.
+- The review's break scenarios 8 to 12 now have tests. Scenario 12 records that a repeated request places another order.
+
+**Still open from the review:**
+
+- No restricted database role.
+- The ledger page reads every row of one SKU at one location.
+- The API identifies the loaded dataset by its number of SKUs only.
+- Exceptions show the latest run, with no history.
+- The validator reuses the detectors' SQL for holds and blocked sales, so it isn't a separate confirmation of those.
+- Decision rechecks skip reallocated holds.
+- `requirements.txt` pins only direct packages, so results on other library versions aren't established.
 
 ## Measured so far
 
@@ -90,22 +124,24 @@ Seed 20261022. The final data includes the labelled problems and decoys.
 | Holds moved off a late truck | 5 | 120 |
 | Promises updated for a late truck | 6 | 249 |
 | Holds cancelled past the limit | 1 | 177 |
-| Generate, all three folders | about 2 s | 131 s |
-| Load, with foreign keys and indexes | about 3 s | 51 s |
-| Validate, including 200 decisions | about 9 s | 125 s |
-| Detect | under 1 s | 61 s |
-| Everything, with `run_all` | 36 s | 920 s |
+| Generate, all three folders | about 2 s | 170 s |
+| Load, with foreign keys and indexes | about 3 s | 60 s |
+| Validate, including 200 decisions | about 9 s | 143 s |
+| Detect | under 1 s | 64 s |
+| Everything, with `run_all` | 45 s | 1,013 s |
 
-All 777 tests pass, from a fresh clone with an empty database, using only the README's commands.
+The full-scale run shared the machine with a test run, so those times are on the slow side.
+
+All 865 tests pass with no skips, from a fresh clone with an empty database, using only the README's commands.
 
 **Validation**
 
 | Dataset | Checks passed | Failed | Unexpected | Exit code |
 |---|---|---|---|---|
-| Starter, clean baseline | 229 of 229 | 0 | 0 | 0 |
-| Starter, final | 223 of 229 | 6 | 0 | 1 from the validator, 0 from `check_failures` |
-| Full, clean baseline | 229 of 229 | 0 | 0 | 0 |
-| Full, final | 224 of 229 | 5 | 0 | 1 from the validator, 0 from `check_failures` |
+| Starter, clean baseline | 231 of 231 | 0 | 0 | 0 |
+| Starter, final | 225 of 231 | 6 | 0 | 1 from the validator, 0 from `check_failures` |
+| Full, clean baseline | 231 of 231 | 0 | 0 | 0 |
+| Full, final | 226 of 231 | 5 | 0 | 1 from the validator, 0 from `check_failures` |
 
 The failures on the final data. Each one lists its failing record IDs, and `check_failures`
 compares them with the labelled IDs, 5 at starter and 50 at full. A count that happens to match

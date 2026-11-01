@@ -1,5 +1,5 @@
 {
-  "passed": 223,
+  "passed": 225,
   "expected_failures": [
     {
       "check": "closing balance does not reconcile to opening plus ledger",

@@ -1,13 +1,13 @@
 {
-  "generate": 2.3,
-  "load clean baseline": 3.2,
-  "validate clean baseline": 8.7,
-  "load final data": 2.8,
-  "validate final data": 8.2,
+  "generate": 3.2,
+  "load clean baseline": 2.6,
+  "validate clean baseline": 11.0,
+  "load final data": 3.1,
+  "validate final data": 11.4,
   "sort failures by record ID": 0.4,
-  "run detectors": 0.7,
-  "score detectors": 0.5,
-  "compare ATP checkpoints": 2.0,
-  "check nothing unrelated changed": 0.9,
-  "same seed twice": 5.2
+  "run detectors": 0.8,
+  "score detectors": 0.6,
+  "compare ATP checkpoints": 2.4,
+  "check nothing unrelated changed": 1.6,
+  "same seed twice": 5.8
 }

@@ -191,7 +191,7 @@ def test_ledger_runs_from_opening_to_closing(reads):
     body = client.get("/api/movements", params={"sku_id": sku_id, "location_id": location_id, "limit": 5}).json()
     assert len(body["rows"]) == 5
     assert body["total_rows"] == len(body["history"])
-    assert body["history"][-1]["on_hand"] == body["worked_out_on_hand"]
+    assert body["history"][-1]["on_hand"] == body["current_on_hand"]
     newest, older = body["rows"][0], body["rows"][1]
     assert newest["on_hand_after"] == older["on_hand_after"] + newest["quantity"]
 
@@ -207,7 +207,7 @@ def test_ledger_shows_when_a_labelled_balance_doesnt_reconcile(reads):
     for row in rows:
         body = client.get("/api/movements", params={"sku_id": row["sku_id"], "location_id": row["location_id"]}).json()
         assert body["reconciles"] is False
-        assert body["worked_out_on_hand"] == row["expected_value"]
+        assert body["at_snapshot_on_hand"] == row["expected_value"]
         assert body["stored_closing"]["on_hand"] == row["actual_value"]
 
 

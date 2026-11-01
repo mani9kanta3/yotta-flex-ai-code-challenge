@@ -37,10 +37,14 @@ def current_time(connection):
 
 
 def next_order_time(connection, order_id):
-    """A minute after the order's last event, so a live action never lands before it."""
+    """
+    A minute after the order's last event, and never behind the clock. Using only the order's
+    own events would date a late payment in the past, back when its hold was still good.
+    """
     rows = fetch_all(connection, "SELECT MAX(occurred_at) AS latest FROM order_event WHERE order_id = %s", (order_id,))
     latest = rows[0]["latest"]
-    return latest + timedelta(minutes=1) if latest else current_time(connection)
+    after_the_clock = current_time(connection) + timedelta(seconds=1)
+    return max(latest + timedelta(minutes=1), after_the_clock) if latest else after_the_clock
 
 
 def get_row_counts(connection):
@@ -163,7 +167,8 @@ def get_due_holds(connection, as_of):
 def get_ledger(connection, sku_id, location_id, limit):
     """
     The ledger for one SKU at one location, with stock after every row, worked out from the
-    opening balance. The stored closing balance sits beside it, so a difference shows.
+    opening balance. The stored closing balance is compared with the ledger at that snapshot's
+    own time, because a sale after the snapshot doesn't make it wrong. Current stock is apart.
     """
     balances = fetch_all(connection, """SELECT snapshot_type, on_hand, blocked, as_of_at, balance_id FROM inventory_balance
                                         WHERE sku_id = %s AND location_id = %s""", (sku_id, location_id))
@@ -189,16 +194,20 @@ def get_ledger(connection, sku_id, location_id, limit):
                      {"on_hand": opening["on_hand"], "blocked": opening["blocked"], "sku_id": sku_id,
                       "location_id": location_id})
 
-    worked_out = rows[0]["on_hand_after"] if rows else opening["on_hand"]
-    worked_out_blocked = rows[0]["blocked_after"] if rows else opening["blocked"]
-    reconciles = closing is not None and closing["on_hand"] == worked_out and closing["blocked"] == worked_out_blocked
+    current = rows[0] if rows else None
+    at_snapshot = next((row for row in rows if closing and row["occurred_at"] <= closing["as_of_at"]), None)
+    snapshot_on_hand = at_snapshot["on_hand_after"] if at_snapshot else opening["on_hand"]
+    snapshot_blocked = at_snapshot["blocked_after"] if at_snapshot else opening["blocked"]
+    reconciles = closing is not None and closing["on_hand"] == snapshot_on_hand and closing["blocked"] == snapshot_blocked
     return {
         "sku_id": sku_id,
         "location_id": location_id,
         "opening": opening,
         "stored_closing": closing,
-        "worked_out_on_hand": worked_out,
-        "worked_out_blocked": worked_out_blocked,
+        "at_snapshot_on_hand": snapshot_on_hand,
+        "at_snapshot_blocked": snapshot_blocked,
+        "current_on_hand": current["on_hand_after"] if current else opening["on_hand"],
+        "current_blocked": current["blocked_after"] if current else opening["blocked"],
         "reconciles": reconciles,
         "total_rows": len(rows),
         "rows": rows[:min(limit, PAGE_LIMIT)],

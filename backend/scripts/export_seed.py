@@ -10,6 +10,7 @@ because they are the same data again and one command recreates them.
 
 import argparse
 import csv
+import itertools
 import json
 
 from app import config
@@ -21,11 +22,13 @@ BATCH_ROWS = 1000
 
 
 def read_table(data_dir, table):
-    """Rows as lists of values. An empty cell is NULL, the same as the loader treats it."""
+    """One row at a time, because a million rows held in memory would use far more than the file."""
     with open(data_dir / f"{table}.csv", encoding="utf-8", newline="") as file:
         reader = csv.reader(file)
         next(reader)
-        return [[value if value != "" else None for value in row] for row in reader]
+        for row in reader:
+            # An empty cell is NULL, the same as the loader treats it.
+            yield [value if value != "" else None for value in row]
 
 
 def sql_value(value):
@@ -40,19 +43,24 @@ def write_sql(path, data_dir):
         file.write("-- Run backend/db/schema.sql first and backend/db/constraints.sql afterwards.\n")
         for table, columns in TABLE_COLUMNS.items():
             rows = read_table(data_dir, table)
-            for start in range(0, len(rows), BATCH_ROWS):
-                values = ",\n".join("(" + ", ".join(sql_value(value) for value in row) + ")"
-                                    for row in rows[start:start + BATCH_ROWS])
+            while True:
+                batch = list(itertools.islice(rows, BATCH_ROWS))
+                if not batch:
+                    break
+                values = ",\n".join("(" + ", ".join(sql_value(value) for value in row) + ")" for row in batch)
                 file.write(f"INSERT INTO {table} ({', '.join(columns)}) VALUES\n{values};\n")
 
 
 def write_json(path, data_dir):
-    tables = {}
-    for table, columns in TABLE_COLUMNS.items():
-        tables[table] = [dict(zip(columns, row)) for row in read_table(data_dir, table)]
+    """Written a row at a time for the same reason, so this builds the brackets and commas itself."""
     with open(path, "w", encoding="utf-8", newline="\n") as file:
-        json.dump(tables, file)
-        file.write("\n")
+        file.write("{\n")
+        for table_number, (table, columns) in enumerate(TABLE_COLUMNS.items()):
+            file.write(f"{',' if table_number else ''}{json.dumps(table)}: [\n")
+            for row_number, row in enumerate(read_table(data_dir, table)):
+                file.write(f"{',' if row_number else ''}{json.dumps(dict(zip(columns, row)))}\n")
+            file.write("]\n")
+        file.write("}\n")
 
 
 def export_seed(data_dir, out_dir):

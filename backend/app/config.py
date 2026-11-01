@@ -17,7 +17,7 @@ load_dotenv(BACKEND_DIR / ".env")
 DB_NAME = os.getenv("DB_NAME", "inventory")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "inventory_dev")
-DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT = int(os.getenv("DB_PORT", "5434"))
 
 DB_DIR = BACKEND_DIR / "db"

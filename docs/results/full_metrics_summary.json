@@ -92,8 +92,8 @@
     }
   },
   "validation": {
-    "checks": 229,
-    "passed": 224,
+    "checks": 231,
+    "passed": 226,
     "expected_failures": [
       {
         "check": "closing balance does not reconcile to opening plus ledger",
@@ -127,7 +127,7 @@
   },
   "clean_baseline": {
     "failed": 0,
-    "checks": 229
+    "checks": 231
   },
   "detection": {
     "BALANCE_NOT_RECONCILED": {
@@ -208,17 +208,17 @@
     "different": []
   },
   "timings": {
-    "generate": 131.2,
-    "load clean baseline": 50.1,
-    "validate clean baseline": 122.0,
-    "load final data": 50.9,
-    "validate final data": 125.4,
-    "sort failures by record ID": 0.4,
-    "run detectors": 60.6,
-    "score detectors": 0.4,
-    "compare ATP checkpoints": 25.1,
-    "check nothing unrelated changed": 32.9,
-    "same seed twice": 320.8
+    "generate": 169.5,
+    "load clean baseline": 61.0,
+    "validate clean baseline": 144.0,
+    "load final data": 60.0,
+    "validate final data": 143.2,
+    "sort failures by record ID": 0.6,
+    "run detectors": 63.6,
+    "score detectors": 2.5,
+    "compare ATP checkpoints": 32.0,
+    "check nothing unrelated changed": 71.7,
+    "same seed twice": 264.9
   },
   "decisions": {
     "total": 72480,
@@ -443,7 +443,7 @@
   },
   "atp_speed": {
     "skus_timed": 21,
-    "median_ms": 96.8,
-    "slowest_ms": 1251.2
+    "median_ms": 131.8,
+    "slowest_ms": 1060.6
   }
 }

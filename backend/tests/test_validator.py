@@ -94,7 +94,8 @@ def test_balance_at_the_wrong_time_fails(cursor):
 
 @pytest.mark.parametrize("table", list(TABLE_COLUMNS))
 def test_empty_table_fails(cursor, table):
-    # TRUNCATE skips the row triggers, and the fixture rolls it back.
+    # History refuses a TRUNCATE, so this switches its triggers off. The fixture rolls it all back.
+    cursor.execute("SET LOCAL session_replication_role = replica")
     cursor.execute(f"TRUNCATE {table} CASCADE")
     assert f"table has rows: {table}" in failed_checks(validate.check_tables_not_empty(cursor))
 
@@ -167,6 +168,7 @@ def test_ledger_with_a_movement_type_missing_fails(cursor, movement_type):
 
 
 def test_empty_ledger_fails_for_every_movement_type(cursor):
+    cursor.execute("SET LOCAL session_replication_role = replica")
     cursor.execute("TRUNCATE inventory_movement CASCADE")
     failed = failed_checks(validate.check_generated_activity(cursor))
     for movement_type in validate.GENERATED_MOVEMENT_TYPES:

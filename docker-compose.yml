@@ -1,5 +1,5 @@
-# Only the database. Port 5434 so it can run beside any other local PostgreSQL.
-# The password is for this local container only, not a real secret.
+# Only the database. Port 5434 so it can run beside any other local PostgreSQL, and only open
+# to this machine. The password is for this local container only, not a real secret.
 services:
   db:
     image: postgres:17
@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: inventory_dev
       POSTGRES_DB: inventory
     ports:
-      - "5434:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
       - inventory_data:/var/lib/postgresql/data
     healthcheck:

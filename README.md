@@ -27,12 +27,13 @@ This project is that system, on generated data:
 
 ## Quick start
 
-You need Python 3.12, Node 20 or later, and Docker. These are PowerShell commands, from the repo root.
+You need Python 3.12, Node 20.19 or later on Node 20 (22.12 or later on Node 22, built with Node 24), and Docker. These are PowerShell commands, from the repo root.
 
-**1. Start the database.** It runs on port 5434, so it can sit beside another PostgreSQL.
+**1. Start the database.** It runs on port 5434, so it can sit beside another PostgreSQL, and only this
+machine can reach it. Its password is for this local container only.
 
 ```powershell
-docker compose up -d
+docker compose up -d --wait
 ```
 
 **2. Install the backend and set up its settings.**
@@ -44,7 +45,7 @@ python -m venv venv
 Copy-Item .env.example .env
 ```
 
-**3. Generate, load, validate, detect and measure everything.** About 35 seconds.
+**3. Generate, load, validate, detect and measure everything.** Under a minute.
 
 ```powershell
 .\venv\Scripts\python.exe -m scripts.run_all --scale starter
@@ -60,18 +61,20 @@ Copy-Item .env.example .env
 
 ```powershell
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
 Open <http://localhost:5173>. The API's own documentation is at <http://localhost:8000/docs>.
 
 Placing orders on the site really writes to the database. To go back to the original data, run step 3 again.
+That replaces everything in the database. Loading checks every file against its manifest first and runs as one
+transaction, so a failed load leaves the data from before in place.
 
 ### The full 1,000,000 movements
 
-One command, about 15 minutes on the laptop this was built on, of which 5 are generating it twice more
-to compare. The full data is too large for Git, and this recreates it byte for byte.
+One command, from `backend`, about 17 minutes on the laptop this was built on. The full data is too large for Git, and this recreates it byte
+for byte. It replaces whatever is in the database.
 
 ```powershell
 .\venv\Scripts\python.exe -m scripts.run_all --scale full
@@ -84,8 +87,11 @@ Restart the API after this if it was running. It finds which dataset is loaded b
 Run these from `backend`. The tests use their own databases, so they can't touch what is loaded.
 
 ```powershell
-.\venv\Scripts\python.exe -m pytest
+.\venv\Scripts\python.exe -m pytest -ra
 ```
+
+Tests that need the database skip themselves if PostgreSQL isn't reachable, so a green run with skips
+isn't the same as a full run. `-ra` lists any skips at the end.
 
 Each step of `run_all` can also run on its own. Write `.\venv\Scripts\python.exe` where these say `python`, unless the venv is activated:
 
@@ -100,7 +106,7 @@ Each step of `run_all` can also run on its own. Write `.\venv\Scripts\python.exe
 | `python -m scripts.run_detect` | The four detectors fill `inventory_exception` |
 | `python -m eval.score --scale starter` | Precision and recall per type |
 | `python -m eval.check_atp --scale starter` | ATP worked out a second way agrees with SQL |
-| `python -m eval.check_unrelated --scale starter` | Injecting the cases changed nothing else |
+| `python -m eval.check_unrelated --scale starter` | Every clean row of all 18 tables is still there through the renumbering, links included, and every new row belongs to a case |
 | `python -m scripts.compare_runs --scale starter` | Same seed twice, every file compared byte for byte |
 | `python -m eval.report --scale starter` | Writes `metrics_summary.json`, which the site shows |
 | `python -m eval.try_seeds --first 1 --count 20` | Runs all of it on other seeds |
@@ -137,8 +143,8 @@ All numbers below were measured on seed 20261022, on the laptop this was built o
 | SKUs and locations | 300 and 12 | 5,000 and 100 |
 | Movements, exact | 20,000 | 1,000,000 |
 | Orders, exact | 1,000 | 50,000 |
-| Clean baseline, checks passed | 229 of 229 | 229 of 229 |
-| Final data, checks passed | 223 of 229 | 224 of 229 |
+| Clean baseline, checks passed | 231 of 231 | 231 of 231 |
+| Final data, checks passed | 225 of 231 | 226 of 231 |
 | Unexpected failures | 0 | 0 |
 | Same seed twice | All 40 files identical | All 40 files identical |
 | Clean rows changed by injection | 0 | 0 |
@@ -160,22 +166,29 @@ the same number of decoys.
 **Don't read 100% as real-world accuracy.** The anomalies and the detectors come from the same author,
 and each detector tests the exact rule its anomaly breaks. So it shows they are consistent. The stronger
 evidence is that the decoys aren't flagged, the clean baseline flags nothing, and ATP worked out two
-separate ways agrees.
+separate ways agrees. The validator reuses the hold and blocked-sale queries from the detectors, so for
+those two its pass isn't a separate confirmation.
 
-**Tests.** All 777 tests pass, in about 9 minutes, including 20 orders racing for one unit through the
+**An independent review** found bugs the tests above had missed, including a paid order that could bring an
+expired hold back after someone else took the stock. See [docs/FINAL_REVIEW.md](docs/FINAL_REVIEW.md). Each
+finding now has tests that failed before the fix, in `backend/tests/test_review_findings.py`, and
+[docs/STATUS.md](docs/STATUS.md) says what was done about each one.
+
+**Tests.** All 865 tests pass, in about 14 minutes, including 20 orders racing for one unit through the
 API. Separately, bugs were introduced on purpose in a scratch copy to see whether the tests notice. That was
 done for each step as it was built, 172 bugs in all, and each was caught, some only after a test was added
-for it. Those lists were not rerun together on the final code.
+for it. Those lists were not rerun together on the final code. The tests for the review's findings were each seen
+to fail before their fix.
 
 | How long, at full scale | Seconds |
 |---|---|
-| Generate all three folders | 131 |
-| Load, with foreign keys and indexes | 51 |
-| Validate, with 200 decisions recalculated | 125 |
-| Run the detectors | 61 |
-| Compare ATP checkpoints | 25 |
-| Generate twice more and compare every file | 321 |
-| One ATP answer | Median 97 ms, slowest of 21 SKUs 1.25 s |
+| Generate all three folders | 170 |
+| Load, with foreign keys and indexes | 60 |
+| Validate, with 200 decisions recalculated | 143 |
+| Run the detectors | 64 |
+| Compare ATP checkpoints | 32 |
+| Generate twice more and compare every file | 265 |
+| One ATP answer | Median 132 ms, slowest of 21 SKUs 1.06 s |
 
 ## The rules
 
@@ -227,8 +240,8 @@ test fails if the app, the loader, the validator or the detectors ever do.
 | Decision | Why | What it costs |
 |---|---|---|
 | Plain SQL through psycopg2, no ORM | Bulk loading and window queries gain little from an ORM, and every query can be read as written | More SQL strings to keep correct |
-| ATP worked out from history on every request | A past question gets the answer it would have had, and a stale cache can't oversell | Slower: 1.25 s for the slowest SKU at full scale |
-| A fixed simulated clock | The same seed gives the same bytes, and tests have exact answers | Live orders are dated just after the data ends, not at the real time |
+| ATP worked out from history on every request | A past question gets the answer it would have had, and a stale cache can't oversell | Slower: about 1 s for the slowest SKU at full scale |
+| A fixed simulated clock | The same seed gives the same bytes, and tests have exact answers. It only moves forward, and an action re-reads it after taking its locks | Live orders are dated just after the data ends, not at the real time |
 | Each order line allocated whole | Simple, and easy to explain | A customer asking for 5 when 4 exist gets none |
 | One parcel per location, and an order ships whole | Simple shipping and a clear trace | Items on the shelf can wait for a late truck on another line |
 | Reserved includes holds on trucks | Can't oversell | Slightly understates what is free on the shelf, which can lose a sale |
@@ -271,10 +284,18 @@ starter. That is more than most retailers would see, and the generator's popular
 - A short pick is refused, and nothing re-allocates it. The generator produces none, so it isn't measured.
 - Nothing runs the expiry and overdue jobs on a schedule. They run when asked.
 - No login, and no deployment. It is a local demo, and anyone who can reach the API can write to it.
+- No idempotency keys. Repeating a request after a lost response places another order, and a test records that.
+- A separate restricted database role. The triggers refuse UPDATE, DELETE and TRUNCATE on history, but the
+  app connects as the owner, who could switch them off. They stop mistakes, not an administrator.
+- An exception audit trail. Running the detectors replaces the last results, so it shows the latest answer only.
 - No automated browser tests. The site was checked by hand in a browser.
 
 **Not load-tested.** Orders race correctly in tests with 20 threads, but nothing measured the API under sustained
-traffic. An order holds its locks for about as long as an ATP answer takes, per line.
+traffic. An order holds its locks for about as long as an ATP answer takes, per line. The ledger page reads every
+row for one SKU at one location to draw its chart, which isn't bounded on a busy pair.
+
+**How the loaded dataset is identified.** The API goes by the number of SKUs, so it can't tell a clean load from a
+final one, or one seed from another.
 
 ## Project layout
 

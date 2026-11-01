@@ -86,11 +86,15 @@ def get_order_trace(connection, order_id):
 
 
 def is_fully_traceable(reservations, movements):
-    """Every hold that was used up has to lead to a sale, and that sale to a parcel."""
+    """Every hold that was used up has to lead to a sale of exactly that stock, and on to a parcel."""
     sales_by_allocation = {movement["allocation_id"]: movement for movement in movements}
     for reservation in reservations:
         if reservation["status"] == "CONSUMED":
             sale = sales_by_allocation.get(reservation["allocation_id"])
-            if sale is None or sale["shipment_id"] is None:
+            if sale is None or sale["movement_type"] != "SALE" or sale["shipment_id"] is None:
+                return False
+            if sale["sku_id"] != reservation["sku_id"] or sale["location_id"] != reservation["location_id"]:
+                return False
+            if sale["quantity"] != -reservation["qty"]:
                 return False
     return True

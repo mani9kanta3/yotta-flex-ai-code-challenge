@@ -3,25 +3,49 @@ Load the CSV files into PostgreSQL, then add foreign keys and indexes.
 
 Run:  python -m scripts.load_data --scale starter
 
-It resets the tables first, so it is safe to run again.
+It replaces whatever is in the database, including any live orders. It checks every file against
+the manifest before touching anything, and the whole load is one transaction: resetting the tables,
+COPY and the foreign keys. So if any of it fails, the data from before is still there.
 """
 
 import argparse
+import json
+import sys
 import time
 from pathlib import Path
 
 from app import config, db
-from generator.export import TABLE_COLUMNS, clean_dir_of
+from generator.export import TABLE_COLUMNS, clean_dir_of, sha256_of
 from generator.settings import SCALES
 from scripts import setup_database
 
 
+class LoadRefused(Exception):
+    """The files aren't what the manifest says. Nothing in the database was touched."""
+
+
+def check_files(data_dir):
+    manifest_path = data_dir / "source_manifest.json"
+    if not manifest_path.exists():
+        raise LoadRefused(f"no source_manifest.json in {data_dir}, generate the data first")
+    files = json.loads(manifest_path.read_text(encoding="utf-8"))["files"]
+    for table in TABLE_COLUMNS:
+        file_name = f"{table}.csv"
+        if not (data_dir / file_name).exists():
+            raise LoadRefused(f"{file_name} is missing from {data_dir}")
+        if file_name not in files or sha256_of(data_dir / file_name) != files[file_name]["sha256"]:
+            raise LoadRefused(f"{file_name} in {data_dir} differs from its manifest")
+
+
 def load(data_dir):
-    setup_database.main()
+    check_files(data_dir)
+    setup_database.ensure_database()
 
     connection = db.get_connection()
     try:
         with connection.cursor() as cursor:
+            cursor.execute(setup_database.read_sql_file("schema.sql"))
+
             # COPY, because one INSERT per row would take far too long at a million rows.
             for table, columns in TABLE_COLUMNS.items():
                 sql = (f"COPY {table} ({', '.join(columns)}) FROM STDIN "
@@ -31,13 +55,14 @@ def load(data_dir):
                     cursor.copy_expert(sql, file)
                 print(f"  loaded {table:22} {cursor.rowcount:>10,} rows  "
                       f"{time.perf_counter() - started:.1f}s")
+
+            started = time.perf_counter()
+            cursor.execute(setup_database.read_sql_file("constraints.sql"))
+            print(f"  foreign keys and indexes took {time.perf_counter() - started:.1f}s")
         connection.commit()
     finally:
+        # Closing without a commit rolls everything back.
         connection.close()
-
-    started = time.perf_counter()
-    setup_database.run_sql_file("constraints.sql")
-    print(f"  foreign keys and indexes took {time.perf_counter() - started:.1f}s")
 
 
 def main():
@@ -48,7 +73,11 @@ def main():
     args = parser.parse_args()
 
     data_dir = Path(args.data) if args.data else config.DATA_DIR / args.scale
-    load(clean_dir_of(data_dir) if args.clean else data_dir)
+    try:
+        load(clean_dir_of(data_dir) if args.clean else data_dir)
+    except LoadRefused as refused:
+        print(f"NOT LOADED: {refused}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -385,12 +385,11 @@ RECORD_CHECKS = [
         SELECT c.balance_id FROM inventory_balance c
         JOIN inventory_balance o
           ON o.sku_id = c.sku_id AND o.location_id = c.location_id AND o.snapshot_type = 'OPENING'
-        LEFT JOIN (
-            SELECT sku_id, location_id,
-                   SUM(quantity) AS total_change,
+        LEFT JOIN LATERAL (
+            SELECT SUM(quantity) AS total_change,
                    SUM(quantity) FILTER (WHERE stock_bucket = 'BLOCKED') AS blocked_change
-            FROM inventory_movement GROUP BY sku_id, location_id) m
-          ON m.sku_id = c.sku_id AND m.location_id = c.location_id
+            FROM inventory_movement
+            WHERE sku_id = c.sku_id AND location_id = c.location_id AND occurred_at <= c.as_of_at) m ON TRUE
         WHERE c.snapshot_type = 'CLOSING'
           AND (c.on_hand <> o.on_hand + COALESCE(m.total_change, 0)
                OR c.blocked <> o.blocked + COALESCE(m.blocked_change, 0))
@@ -511,6 +510,14 @@ ALLOWED_VALUES = [
 ]
 
 
+def overlap_sql(table, id_column, same_thing):
+    """Two versions in effect at once would make a location a candidate twice, and double its stock."""
+    match = " AND ".join(f"a.{column} = b.{column}" for column in same_thing)
+    return f"""SELECT COUNT(*) FROM {table} a JOIN {table} b ON {match} AND a.{id_column} < b.{id_column}
+               WHERE a.effective_from < COALESCE(b.effective_to, 'infinity'::date)
+                 AND b.effective_from < COALESCE(a.effective_to, 'infinity'::date)"""
+
+
 def duplicate_key_sql(table, key):
     return f"SELECT COUNT(*) FROM (SELECT {key} FROM {table} GROUP BY {key} HAVING COUNT(*) > 1) d"
 
@@ -534,6 +541,8 @@ CHECKS += [(f"reference points at nothing: {child}.{child_columns}", orphan_sql(
            for child, child_columns, parent, parent_columns in FOREIGN_KEYS]
 CHECKS += [(f"value not allowed: {table}.{column}", bad_value_sql(table, column, allowed))
            for table, column, allowed in ALLOWED_VALUES]
+CHECKS += [("replenishment rule versions that overlap", overlap_sql("replenishment_rule", "rule_id", ["sku_id", "location_id"])),
+           ("channel buffer versions that overlap", overlap_sql("channel_location", "channel_location_id", ["channel_code", "location_id"]))]
 
 # Size targets, as manifest key and table.
 SCALE_TARGETS = [("skus", "sku"), ("locations", "location"), ("movements", "inventory_movement"),
