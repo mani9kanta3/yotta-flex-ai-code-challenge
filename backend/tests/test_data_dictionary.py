@@ -126,8 +126,9 @@ def test_ground_truth_and_checkpoint_columns_are_described(generated_data):
 def test_manifest_fields_are_described(generated_data):
     manifest = json.loads((generated_data / "source_manifest.json").read_text(encoding="utf-8"))
     text = DICTIONARY.read_text(encoding="utf-8")
+    section = text.split("### source_manifest.json")[1].split("### ")[0]
     for field in manifest:
-        assert f"`{field}`" in text, field
+        assert f"`{field}`" in section, field
 
 
 def test_generation_counters_agree_with_the_tables(generated_data, final_cursor):

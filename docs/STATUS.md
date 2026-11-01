@@ -34,7 +34,13 @@ Updated after every step. "Built" means the code exists, it ran, and tests cover
 | Ground truth in its own folder, read only by `eval/` | `generator/export.py`, `eval/` | `test_anomalies.py` |
 | Four detectors, from the ledger and events alone | `app/detect.py`, `scripts/run_detect.py` | `test_anomalies.py` |
 | Precision and recall per type | `eval/score.py` | `test_anomalies.py` |
-| Expected and unexpected validation failures reported apart | `eval/check_failures.py` | `test_anomalies.py` |
+| Expected and unexpected failures sorted by comparing record IDs with labelled IDs | `eval/check_failures.py` | `test_anomalies.py`, both scales run |
+| A check missing from the summary, or one that reports no IDs, counts as a failure | `eval/check_failures.py`, `scripts/validate.py` | `test_anomalies.py` |
+| ATP checkpoints around expiry, truck arrival and cancellation, from a second calculation | `generator/checkpoints.py`, `eval/check_atp.py` | `test_checkpoints.py`, both scales run |
+| Validator counts duplicate keys, broken references and values not allowed | `scripts/validate.py` | `test_validator.py`, lists compared with the database |
+| Data files compared with the manifest by checksum | `scripts/validate.py` | `test_validator.py` |
+| Data dictionary, compared with the real database and data by a test | `docs/DATA_DICTIONARY.md` | `test_data_dictionary.py` |
+| Every check run on other seeds with one command | `eval/try_seeds.py` | 40 seeds run, see Known problems |
 | Starter data, ground truth and metrics ready to commit | `backend/data/starter/`, `backend/data/ground_truth/starter/` | Manifest checksums, `.gitattributes` |
 | Live numbering carries on after a load | `db/constraints.sql` | `test_order_flow.py` |
 
@@ -49,19 +55,18 @@ Updated after every step. "Built" means the code exists, it ran, and tests cover
 | Returns | Good and damaged returns in live code and generated data | No return window |
 | Live stock changes | Orders, transfers, shipping, returns and late handling take the SKU-location lock | Walk-in sales, BLOCK and adjustments exist only in the generator, with no live version until the API step |
 | Generated decisions agree with SQL | **At full scale, only a sample of 200 decisions was checked against SQL: 200 of 72,139 on the clean baseline and 200 of 72,339 on the final data.** Every decision was checked at starter scale: all 1,443 on the clean baseline agree, and of all 1,463 on the final data, only the 5 labelled ones differ | More than 72,000 full-scale decisions have not been recalculated. `validate --decisions` can run more, at several queries each |
-| Ground truth | Anomalies, decoys and oversell attempts | The ATP checkpoints the plan mentioned aren't written. The decision recheck does the same job |
+| ATP checkpoints | 40 rows at starter and 200 at full, all matching SQL | Only a few moments: 5 events of each of 4 kinds at starter, 25 at full, with a row before and at each |
 
 ## Not built
 
 | Feature | Planned step |
 |---|---|
-| Data dictionary | 6 |
-| Full validator review and manifest review | 6 |
 | Tuning, if the movement mix needs it | 7 |
 | API | 9 |
 | React page | 10 |
 | `run_all` command, README and AI_USAGE.md | 11 |
 | STORE orders | No step. Walk-in sales cover the store channel, and the brief doesn't name STORE orders. Build only if time is left |
+| SQL or JSON copies of the seed data | The brief says "CSV/JSON/SQL". Only CSV is exported, with JSON for the manifest and reports. Decide in step 11 |
 
 ## Measured so far
 
@@ -80,29 +85,35 @@ Seed 20261022. The final data includes the labelled problems and decoys.
 | Holds moved off a late truck | 2 | 159 |
 | Promises updated for a late truck | 11 | 289 |
 | Holds cancelled past the limit | 6 | 156 |
-| Generate, all three folders | about 2 s | about 2 min |
-| Load, with foreign keys and indexes | about 3 s | about 45 s |
-| Validate, including 200 decisions | about 8 s | about 2 min |
-| Detect | under 1 s | about 55 s |
+| Generate, all three folders | about 2 s | about 2 to 4 min |
+| Load, with foreign keys and indexes | about 3 s | about 1 min |
+| Validate, including 200 decisions | about 8 s | about 3 min |
+| Detect | under 1 s | about 1 min |
+
+The slower full-scale times are from a run sharing the machine with other jobs.
+
+All 689 tests pass, in about 9 minutes.
 
 **Validation**
 
 | Dataset | Checks passed | Failed | Unexpected | Exit code |
 |---|---|---|---|---|
-| Starter, clean baseline | 127 of 127 | 0 | 0 | 0 |
-| Starter, final | 121 of 127 | 6 | 0 | 1 from the validator, 0 from `check_failures` |
-| Full, clean baseline | 127 of 127 | 0 | 0 | 0 |
-| Full, final | 122 of 127 | 5 | 0 | 1 from the validator, 0 from `check_failures` |
+| Starter, clean baseline | 229 of 229 | 0 | 0 | 0 |
+| Starter, final | 223 of 229 | 6 | 0 | 1 from the validator, 0 from `check_failures` |
+| Full, clean baseline | 229 of 229 | 0 | 0 | 0 |
+| Full, final | 224 of 229 | 5 | 0 | 1 from the validator, 0 from `check_failures` |
 
-The failures on the final data, with the same counts as what is labelled (5 at starter, 50 at full):
+The failures on the final data. Each one lists its failing record IDs, and `check_failures`
+compares them with the labelled IDs, 5 at starter and 50 at full. A count that happens to match
+isn't enough. Nothing passed by count alone.
 
-| Check | Explained by |
-|---|---|
-| closing balance does not reconcile to opening plus ledger | `BALANCE_NOT_RECONCILED` |
-| network stock plus in transit differs from opening plus outside changes | `BALANCE_NOT_RECONCILED` |
-| hold above what could be promised when it was placed | `RESERVATION_EXCEEDS_AVAILABLE` |
-| order sale from the blocked bucket | `FULFILLED_FROM_BLOCKED` |
-| transfer received at or before it shipped | `TRANSFER_DOUBLE_COUNTED` |
+| Check | Explained by | IDs compared |
+|---|---|---|
+| closing balance does not reconcile to opening plus ledger | `BALANCE_NOT_RECONCILED` | Balance |
+| network stock plus in transit differs from opening plus outside changes | `BALANCE_NOT_RECONCILED` | SKU, because it adds up a whole SKU |
+| hold above what could be promised when it was placed | `RESERVATION_EXCEEDS_AVAILABLE` | Reservation |
+| order sale from the blocked bucket | `FULFILLED_FROM_BLOCKED` | Movement |
+| transfer received at or before it shipped | `TRANSFER_DOUBLE_COUNTED` | Shipment |
 
 The starter run has a sixth failure: the sample of 200 decisions landed on 1 labelled order, whose
 logged decision is stale on purpose. At full scale the sample landed on none, so it can't speak
@@ -125,6 +136,88 @@ each detector tests the exact condition its anomaly breaks. So 1.0 shows the two
 consistent. It isn't evidence of how they would do on real data or on a kind of problem
 nobody thought of. The decoys and the clean baseline run are the stronger part, because they
 show the detectors don't simply flag everything suspicious.
+
+**ATP checkpoints**
+
+The decision recheck only asks about the second an order was decided. These ask about one second
+before and the second of an event no order decision looks at. `generator/checkpoints.py` works
+them out in plain Python from the generator's own lists, and `eval/check_atp.py` compares them
+with what `app/atp.py` answers in SQL.
+
+| Kind | Starter matched | Full matched |
+|---|---|---|
+| Hold expiring | 10 of 10 | 50 of 50 |
+| Truck arriving | 10 of 10 | 50 of 50 |
+| Customer cancelling | 10 of 10 | 50 of 50 |
+| Late truck: hold cancelled or moved | 10 of 10 | 50 of 50 |
+
+- All 25 full-scale arrivals leave ATP the same, because inbound stock becomes stock on hand.
+  Counting it at both ends would raise ATP at that second.
+- All 25 expiries and all 25 customer cancels give back exactly the units held. A late truck is
+  handled once for all its holds, so 11 of those 25 gave back more than the one hold checked,
+  because other holds on that truck ended in the same second.
+- ATP went below zero on 18 of the 200 rows at full scale, as low as -274. A paid hold on an
+  overdue truck still counts as reserved, but the truck no longer counts as inbound. `promisable`
+  stays at 0, so nothing can be promised from it.
+- **What this doesn't show:** these are a small sample, picked evenly, and only on SKUs with no
+  labelled case. Both calculations were written by the same person from the same formula, so they
+  would share a misunderstanding of the rule.
+
+**Manifest review**
+
+| Finding | What happened |
+|---|---|
+| Only row counts were compared with the manifest, so a file with changed contents would pass | Fixed. The validator now compares every checksum |
+| The summary didn't say which data it was about, or how many decisions it covered | Fixed. It now has dataset, seed, scale, decisions checked and decisions total |
+| The checkpoints had no checksum anywhere | Fixed. The final manifest has one, with no answers in it |
+| Counters in the manifest could drift from the data | Tested. A test compares 10 of them with the tables |
+| `python_version` is in the manifest, so another Python gives a different manifest even if the CSV files match | Left in, because it is true and useful. Only Python 3.12.3 has been run |
+| Nothing records which code version wrote the data | Left out. The commit doesn't exist until after the data is generated. The generator command and seed are what recreate it |
+| The summary lists failing IDs beside the data | Left there. They come from SQL on the data, not from the labels, and only `check_failures` reads the file. The loader opens the 18 table files by name |
+
+## Known problems
+
+**Other seeds.** Only seed 20261022 has run at full scale. `python -m eval.try_seeds` runs everything
+on other seeds at starter scale: both datasets, the ID comparison, the detectors and the checkpoints.
+40 seeds were tried, 1 to 20 and 20261023 to 20261042.
+
+| Result | Seeds | What happens |
+|---|---|---|
+| No problem | The other 36 | Every check passes or is explained, with scores of 1.0 and every checkpoint matching |
+| Generator refuses to run | 20261037 | `could not place a blocked stock case, no SKU left that it fits`. It stops and writes no final data, rather than place a bad case |
+| Validation fails | 6, 15 | No hold was moved off a late truck, so `generated data includes holds moved off a late truck` fails on both datasets |
+| Validation fails | 20261035 | No hold was cancelled past the limit, so `generated data includes holds cancelled past the late limit` fails on both datasets |
+
+These three fail because the cases are rare at starter size and depend on chance, not because a rule
+broke. The validator is right to fail them, since a rule can't be shown to work on rows that don't
+exist. Nothing was changed to make them pass.
+
+**The anomaly pattern.** Each case has to cause only its own problem, so it goes where nothing depends
+on it. That makes the cases look different from normal data. Measured at full scale on the final data:
+
+| Pattern | Cases | Everything else | Why it is there |
+|---|---|---|---|
+| Truck on the road for 1 second or less | 100 of 100 transfer cases | 0 of 81,077 received trucks. The shortest takes 1 day 11 hours | The anomaly is the ledger order, and its events are dated around it |
+| First ETA exactly 2 days out | 100 of 100 transfer cases | 6 of 82,462 trucks | Written that way in `write_transfer_case` |
+| Order is the last one on its SKU | 200 of 200 order cases | 4,124 of 49,800 orders, 8.3% | No later decision may depend on the changed numbers |
+| Order has exactly one line | 200 of 200 order cases | 32,423 of 49,800 orders, 65.1% | So one case stays on one SKU |
+| Order is for exactly 1 unit | 100 of 100 blocked cases | 20,442 of 49,800 orders, 41.0% | Written that way in `write_blocked_case` |
+| Order expired unpaid | 100 of 100 reservation cases | 6,902 of 49,800 orders, 13.9% | So the bad hold lasts only briefly |
+| SKU's last order was before September | 340 of 400 SKUs with a case, 85% | 2,674 of all 4,576 SKUs with orders, 58% | Half of the SKUs stop getting orders, so cases spread out |
+
+What that means:
+
+- **Anyone can find all 100 transfer cases from the road time alone**, anomalies and decoys together.
+  It takes the ledger order to tell one from the other. Last order and one line together narrow all
+  50,000 orders to 2,210, of which 200 are cases.
+- **The four detectors use none of this.** They test the rule each anomaly breaks. So their scores
+  aren't inflated by it, and a new bad row with no such pattern is still found, which a test shows.
+- **Don't train a model on this data to find anomalies.** It would learn these patterns and not the
+  problem, and it would score well for the wrong reason.
+
+**Settings chosen to fit the cases.** To make room, half of the SKUs stop getting online orders at a
+random date, and opening damaged stock went from 1% to 8% of pairs. Both change the data for that
+reason alone. Late-truck rates are also set on purpose, so they say nothing about real carriers.
 
 **Full-scale movements**
 
@@ -153,16 +246,7 @@ and transfer decoys at 0.89. So at starter scale, don't read anything into their
 
 **Other limits**
 
-- A labelled case is always on a SKU with no later online orders, because no later decision may
-  depend on it. No detector uses that, but it is a pattern a reader could spot.
-- To make room for cases, half of the SKUs stop getting online orders at a random date, and opening
-  damaged stock went from 1% to 8% of pairs. Both change the data for that reason alone.
 - A labelled reservation expires unpaid, so it holds stock only briefly. The recommended action
   is what should have happened when it was found.
-- Comparing failure counts alone can't tell a labelled failure from an unlabelled one of the same
-  kind. The detector scores and the clean-versus-final test cover that.
-- Other seeds: 19 of 20 tried at starter placed every case. The other one stopped with an error
-  rather than place a bad case, and 1 of the 19 had no late cancellation, which the validator
-  reports as a failure. Only seed 20261022 was run at full scale.
 - ATP for the SKU with the most trucks took about 610 ms when last measured, in Step 4, and an order
   holds its locks about that long per line. Orders haven't been load-tested at full scale.

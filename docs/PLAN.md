@@ -700,9 +700,10 @@ then follows from a rule. No payment before `expires_at` means EXPIRED.
 `ground_truth.csv` holds the injected anomalies with expected and actual values and the
 expected decision, the decoys, and the oversell attempts with their expected rejection.
 
-**Changed:** the ATP checkpoints planned here aren't written. The validator recalculates order
-decisions in SQL instead, which is the same comparison of two separate calculations. At full
-scale it checks a sample of only 200 decisions. Every decision was checked at starter scale.
+`atp_checkpoints.csv` sits beside it: ATP worked out a second way, one second before and at the
+moment a hold expired, a truck arrived or a hold was cancelled. The validator also recalculates
+order decisions in SQL, but only at the second each was decided. At full scale that is a sample
+of only 200 decisions. Every decision was checked at starter scale.
 
 How it stays out of the input data:
 

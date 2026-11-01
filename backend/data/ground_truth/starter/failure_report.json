@@ -93,6 +93,8 @@
       "records": [
         "ORD-2026-000890-L01"
       ],
+      "decisions_checked": 200,
+      "decisions_total": 1463,
       "labelled": 1,
       "missed": [],
       "unrelated": [],

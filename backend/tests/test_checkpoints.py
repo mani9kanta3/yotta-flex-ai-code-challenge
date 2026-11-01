@@ -16,8 +16,6 @@ from eval import check_atp
 from generator import checkpoints, export
 from tests.conftest import FINAL_DB
 
-KINDS_OF_HOLD = [checkpoints.KIND_EXPIRY, checkpoints.KIND_CUSTOMER_CANCEL, checkpoints.KIND_LATE_CANCEL]
-
 
 def load(generated_data):
     return check_atp.load_checkpoints(export.truth_dir_of(generated_data))
@@ -58,11 +56,18 @@ def test_each_pair_is_one_second_apart_on_the_same_record(generated_data):
             assert datetime.fromisoformat(at["as_of_at"]) - datetime.fromisoformat(before["as_of_at"]) == timedelta(seconds=1)
 
 
-@pytest.mark.parametrize("kind", KINDS_OF_HOLD)
+@pytest.mark.parametrize("kind", [checkpoints.KIND_EXPIRY, checkpoints.KIND_CUSTOMER_CANCEL])
 def test_a_hold_ending_gives_its_stock_back_and_nothing_else_moves(generated_data, kind):
     for before, at in before_and_at(load(generated_data), kind):
         assert number(before, "reserved") - number(at, "reserved") == number(at, "event_qty")
         assert number(at, "atp") - number(before, "atp") == number(at, "event_qty")
+        assert number(before, "on_hand") == number(at, "on_hand")
+
+
+def test_a_late_truck_cancel_gives_back_at_least_its_own_stock(generated_data):
+    """A late truck is handled once for all its holds, so others can end in the same second."""
+    for before, at in before_and_at(load(generated_data), checkpoints.KIND_LATE_CANCEL):
+        assert number(before, "reserved") - number(at, "reserved") >= number(at, "event_qty")
         assert number(before, "on_hand") == number(at, "on_hand")
 
 
@@ -80,12 +85,13 @@ def test_checkpoints_stay_away_from_every_labelled_case(generated_data):
     assert not labelled_skus & {row["sku_id"] for row in load(generated_data)}
 
 
-def test_checker_notices_a_number_that_differs(generated_data, final_cursor):
+@pytest.mark.parametrize("name", ["on_hand", "blocked", "reserved", "inbound", "atp", "promisable"])
+def test_checker_notices_any_number_that_differs(generated_data, final_cursor, name):
     row = dict(load(generated_data)[0])
-    row["atp"] = number(row, "atp") + 1
+    row[name] = number(row, name) + 1
     results, differing = check_atp.check_checkpoints(final_cursor, [row])
     assert results[row["kind"]]["matched"] == 0
-    assert list(differing[0]["differences"]) == ["atp"]
+    assert list(differing[0]["differences"]) == [name]
 
 
 def test_checker_notices_a_location_with_no_answer(generated_data, final_cursor):
@@ -123,6 +129,53 @@ def test_manifest_names_the_checkpoint_file_by_checksum_only(generated_data):
     assert "atp_checkpoints_file" in text
     for row in load(generated_data):
         assert row["record_id"] not in text
+
+
+# ------------------------------------------------------------ hand-written numbers
+
+T = datetime(2026, 3, 1, 10)
+PAIR = {"sku_id": "SKU-1", "location_id": "LOC-1", "opening_on_hand": 10, "opening_blocked": 0, "ranged_from": T.date(),
+        "sku": {"effective_from": T.date(), "effective_to": None}, "rule": {"allow_inbound_atp": True}}
+
+
+class SmallLedger:
+    """One pair, one hold and one truck, so each rule can be checked at its exact second."""
+
+    def __init__(self, hold_events=(), truck_events=(), expires_at=T + timedelta(minutes=30), eta_at=T + timedelta(hours=5)):
+        self.pairs = [PAIR]
+        self.reserved = {0: 0}
+        self.movements = []
+        self.holds = [{"index": 0, "pair_index": 0, "status": "ACTIVE", "qty": 3, "expires_at": expires_at}]
+        self.reservation_events = [(moment, 0, None, status, "TEST", None) for moment, status in hold_events]
+        self.shipments = [{"shipment_type": "TRANSFER", "destination_index": 0, "qty": 4, "original_eta_at": eta_at}]
+        self.shipment_events = [(moment, 0, None, status, "TEST", None) for moment, status in truck_events]
+        self.channel_locations = {(checkpoints.ARRIVAL_CHANNEL, "LOC-1"): {"effective_from": T.date(), "buffer_units": 0}}
+
+
+def test_a_hold_stops_counting_at_its_expiry_even_with_no_expired_event_yet():
+    """A late expiry job can't overstate what is reserved."""
+    ledger = SmallLedger(hold_events=[(T, "ACTIVE")])
+    timeline = checkpoints.Timeline(ledger)
+    expires_at = ledger.holds[0]["expires_at"]
+    assert checkpoints.reserved_at(timeline, 0, expires_at - timedelta(seconds=1)) == 3
+    assert checkpoints.reserved_at(timeline, 0, expires_at) == 0
+
+
+def test_a_truck_counts_until_its_eta_and_not_after():
+    ledger = SmallLedger(truck_events=[(T, "IN_TRANSIT")])
+    timeline = checkpoints.Timeline(ledger)
+    eta_at = ledger.shipments[0]["original_eta_at"]
+    assert checkpoints.inbound_at(ledger, timeline, 0, eta_at) == 4
+    assert checkpoints.inbound_at(ledger, timeline, 0, eta_at + timedelta(seconds=1)) == 0
+
+
+def test_only_a_truck_still_counted_as_inbound_is_picked_as_an_arrival():
+    """An overdue truck was already out of ATP, so it can't show whether arriving double counts."""
+    on_time = T + timedelta(hours=4)
+    overdue = T + timedelta(hours=6)
+    for arrived_at, picked in ((on_time, 1), (overdue, 0)):
+        ledger = SmallLedger(truck_events=[(T, "IN_TRANSIT"), (arrived_at, "RECEIVED")])
+        assert len(checkpoints.arrivals_to_check(ledger, checkpoints.Timeline(ledger), set(), 5)) == picked
 
 
 def test_evenly_spaced_takes_at_most_what_was_asked():

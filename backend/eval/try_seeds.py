@@ -76,7 +76,9 @@ def try_seed(seed, out_dir, scale):
 def describe(result):
     if not result["generated"]:
         return f"seed {result['seed']:>9}  STOPPED  {result['error']}"
-    problems = result["clean_failures"] + result["unexpected_failures"] + result["atp_kinds_missing"]
+    problems = [f"clean baseline: {check}" for check in result["clean_failures"]]
+    problems += [f"final data: {check}" for check in result["unexpected_failures"]]
+    problems += [f"no ATP checkpoints for {kind}" for kind in result["atp_kinds_missing"]]
     if result["atp_differing"]:
         problems.append(f"{result['atp_differing']} ATP checkpoints differ")
     if not result["perfect_scores"]:
