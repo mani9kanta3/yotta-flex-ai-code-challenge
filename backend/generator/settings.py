@@ -74,6 +74,9 @@ TRANSFER_LATE_CHANCE = 0.08
 TRANSFER_DELAY_DAYS = (1, 5)
 ETA_MISSED_NOTICE_HOURS = 1
 
+# Some trucks make good time and come in the day before they are due.
+TRANSFER_EARLY_CHANCE = 0.15
+
 # What an online order looks like.
 ORDER_LINE_COUNTS = [1, 2, 3]
 ORDER_LINE_COUNT_WEIGHTS = [65, 25, 10]
@@ -157,4 +160,7 @@ def clean_scale(scale):
     clean = dict(scale)
     clean["movements"] = scale["movements"] - injected_per_kind * (1 + 2)
     clean["orders"] = scale["orders"] - injected_per_kind * (1 + 1)
+    # A negative target would make the budget look bigger than it is.
+    if clean["movements"] < 0 or clean["orders"] < 0:
+        raise RuntimeError(f"could not place {injected_per_kind} cases per type, the targets don't leave room for them")
     return clean

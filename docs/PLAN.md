@@ -283,6 +283,10 @@ A reservation has `supply_type` ON_HAND or INBOUND, and it is never a mix of bot
    both holding stock. The stock is read before the old hold lets go, so a decision can't
    count units it is about to give up, which can miss a move but can't oversell.
 5. **Measured:** promises kept on time, re-promised, reallocated and cancelled.
+6. **Travel times (changed).** A truck leaves during store hours and is due at noon after its lead
+   time. It comes in that morning, or 15% of the time the morning before. Labelled trucks and decoys
+   follow the same rules. Only the anomaly's TRANSFER_OUT is different: it is posted on or after the
+   day the stock arrives.
 
 ### Concurrent allocation (changed)
 
@@ -478,7 +482,7 @@ Each one is self-contained and passes every FK. Only its business meaning is wro
 | `BALANCE_NOT_RECONCILED` | One stored CLOSING `on_hand` changed by 1 to 3 units | All movements | Stored value differs from opening + ledger | Recount. ATP keeps using the ledger |
 | `RESERVATION_EXCEEDS_AVAILABLE` | New order with a hold 1 to 3 units above what could be promised. Its decision row shows a stale ATP, as if a cache was out of date. **Changed:** it expires unpaid rather than staying CONFIRMED, so it holds stock only briefly and looks like thousands of other expired orders | All other reservations | Recalculate from the ledger and events at `created_at`, without trusting the log | Cancel or reallocate |
 | `FULFILLED_FROM_BLOCKED` | New order whose SALE draws from the BLOCKED bucket, as if a damaged bin was scanned | Sellable stock | SALE row with bucket BLOCKED | Quarantine and review |
-| `TRANSFER_DOUBLE_COUNTED` | New transfer whose TRANSFER_IN is 1 to 6 hours before its TRANSFER_OUT | All other transfers | IN at or before OUT on the same shipment | Exclude from ATP until received |
+| `TRANSFER_DOUBLE_COUNTED` | New transfer with normal travel times, whose TRANSFER_OUT is posted during store hours on or after the day its TRANSFER_IN arrives | All other transfers | IN at or before OUT on the same shipment | Exclude from ATP until received |
 
 **Decoys** are valid rows that look suspicious. They appear in ground truth with
 `expected_issue = NONE`, and a detector that flags one counts as a false positive.
@@ -488,7 +492,7 @@ Each one is self-contained and passes every FK. Only its business meaning is wro
 | Balance | A pair with real movements that net to exactly zero |
 | Reservation | Quantity exactly equal to what could be promised |
 | Blocked | SALE from SELLABLE at a location that also holds blocked stock |
-| Transfer | Received 1 second after shipping |
+| Transfer | A short trip that comes in the day before it is due, having left first |
 
 **Each case causes only its own problem.** A row added in the past changes the answer to every
 later question about that SKU, so a case has to fit these rules or it isn't placed:

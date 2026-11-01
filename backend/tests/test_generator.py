@@ -544,5 +544,6 @@ def test_same_seed_gives_identical_files(tmp_path):
 
 def test_different_seed_gives_different_data(tmp_path):
     first = generate(small_scale(), TEST_SEED, tmp_path / "a")
-    second = generate(small_scale(), TEST_SEED + 1, tmp_path / "b")
+    # Plus 2, because the next seed is one the generator refuses. docs/STATUS.md lists those.
+    second = generate(small_scale(), TEST_SEED + 2, tmp_path / "b")
     assert first["files"]["inventory_movement.csv"]["sha256"] != second["files"]["inventory_movement.csv"]["sha256"]

@@ -6,6 +6,7 @@ own problem, and the detectors scored against the answers.
 import csv
 import json
 import os
+import random
 import shutil
 import subprocess
 import sys
@@ -15,7 +16,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from app import atp, config, detect, orders
-from eval import check_failures, score
+from eval import check_failures, check_unrelated, score
 from generator import export, inject, settings
 from scripts import compare_runs, validate
 from scripts.generate import generate
@@ -91,10 +92,16 @@ def test_each_type_has_its_anomalies_and_decoys(generated_data, issue):
     assert len(decoys(generated_data, issue)) == SMALL_CASES_PER_TYPE
 
 
-def test_generator_refuses_when_it_cannot_place_every_case(tmp_path):
-    scale = dict(small_scale(), anomalies_per_type=500)
+def test_generator_refuses_when_it_runs_out_of_skus_for_the_cases(tmp_path):
+    scale = dict(small_scale(), anomalies_per_type=100)
     with pytest.raises(RuntimeError, match="could not place"):
         generate(scale, TEST_SEED, tmp_path / "too_many")
+
+
+def test_generator_refuses_more_cases_than_the_targets_leave_room_for():
+    """A negative order target would make the budget look bigger, and overshoot the total."""
+    with pytest.raises(RuntimeError, match="don't leave room"):
+        settings.clean_scale(dict(small_scale(), anomalies_per_type=500))
 
 
 # ------------------------------------------------------------ ground truth stays apart
@@ -179,6 +186,67 @@ def test_opening_balances_are_the_same_in_both(generated_data):
         return {(r["sku_id"], r["location_id"]): (r["on_hand"], r["blocked"])
                 for r in read_csv(folder / "inventory_balance.csv") if r["snapshot_type"] == "OPENING"}
     assert opening(generated_data) == opening(export.clean_dir_of(generated_data))
+
+
+def copy_of_run(generated_data, tmp_path):
+    """Both datasets and the answers in a folder of their own, so a test can change them."""
+    shutil.copytree(generated_data, tmp_path / "tiny")
+    shutil.copytree(export.clean_dir_of(generated_data), tmp_path / "tiny_clean")
+    shutil.copytree(export.truth_dir_of(generated_data), tmp_path / "ground_truth" / "tiny")
+    return tmp_path / "tiny"
+
+
+def test_nothing_unrelated_changed(generated_data):
+    assert check_unrelated.compare_datasets(generated_data) == []
+
+
+def change_one_row(path, old, new):
+    text = path.read_text(encoding="utf-8")
+    assert old in text
+    path.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
+
+
+def test_a_changed_clean_movement_is_noticed(generated_data, tmp_path):
+    final_dir = copy_of_run(generated_data, tmp_path)
+    change_one_row(final_dir / "inventory_movement.csv", ",WALK_IN,", ",WALK_IN_X,")
+    problems = check_unrelated.compare_datasets(final_dir)
+    assert "1 clean inventory_movement rows changed or went missing" in problems
+    assert "1 new inventory_movement rows don't belong to a labelled case" in problems
+
+
+def test_a_changed_order_is_noticed(generated_data, tmp_path):
+    final_dir = copy_of_run(generated_data, tmp_path)
+    change_one_row(final_dir / "orders.csv", ",WEB,", ",APP,")
+    assert any("orders rows" in problem for problem in check_unrelated.compare_datasets(final_dir))
+
+
+def test_a_changed_transfer_is_noticed(generated_data, tmp_path):
+    final_dir = copy_of_run(generated_data, tmp_path)
+    change_one_row(final_dir / "shipment.csv", ",RECEIVED,", ",IN_TRANSIT,")
+    assert any("shipment rows" in problem for problem in check_unrelated.compare_datasets(final_dir))
+
+
+def test_changed_master_data_is_noticed(generated_data, tmp_path):
+    final_dir = copy_of_run(generated_data, tmp_path)
+    change_one_row(final_dir / "product.csv", ",ACTIVE,", ",DISCONTINUED,")
+    assert "product differs" in check_unrelated.compare_datasets(final_dir)
+
+
+def test_a_changed_balance_outside_the_cases_is_noticed(generated_data, tmp_path):
+    final_dir = copy_of_run(generated_data, tmp_path)
+    case_skus = {row["sku_id"] for row in truth_rows(generated_data)}
+    rows = read_csv(final_dir / "inventory_balance.csv")
+    closing = next(row for row in rows if row["snapshot_type"] == "CLOSING" and row["sku_id"] not in case_skus)
+    opening = next(row for row in rows if row["snapshot_type"] == "OPENING")
+    for row, column in ((closing, "on_hand"), (opening, "on_hand")):
+        row[column] = str(int(row[column]) + 1)
+    with open(final_dir / "inventory_balance.csv", "w", encoding="utf-8", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=list(rows[0]), lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+    problems = check_unrelated.compare_datasets(final_dir)
+    assert "opening balances differ" in problems
+    assert "1 closing balances changed on a SKU with no case" in problems
 
 
 def test_each_case_is_on_a_sku_of_its_own(generated_data, final_cursor):
@@ -335,6 +403,28 @@ def test_truck_overlap_counts_either_end_of_the_window():
     assert not inject.has_truck_on_the_road(trucks, T + timedelta(hours=5, seconds=1), T + timedelta(hours=9))
 
 
+def test_a_transfer_case_that_would_end_after_the_data_is_not_placed():
+    class Ledger:
+        pairs_of_sku = {"SKU-1": [1]}
+        index_of_pair = {("SKU-1", "LOC-0"): 0}
+        pairs = {
+            0: {"rule": {"safety_stock": 0}},
+            1: {"rule": {"source_location_id": "LOC-0", "reorder_qty": 5, "lead_time_days": 2},
+                "ranged_from": T.date(), "sku": {"effective_from": T.date(), "effective_to": None}},
+        }
+
+    class Injector:
+        ledger = Ledger
+        rng = random.Random(TEST_SEED)
+        history = history_of([(T, 50)])
+
+        @staticmethod
+        def find_slot(_sku_id, _hours):
+            return config.AS_OF - timedelta(hours=12)
+
+    assert inject.try_transfer(Injector, "SKU-1", is_decoy=True) is None
+
+
 def test_a_sku_with_a_hold_still_open_is_never_quiet():
     class Ledger:
         sku_ids = ["SKU-1"]
@@ -473,22 +563,143 @@ def transfer_times(cursor, shipment_id):
 
 
 def test_double_counted_transfer_really_counts_at_both_ends_until_it_leaves(generated_data, final_cursor):
-    shipment_id = sorted(labelled(generated_data, settings.ISSUE_TRANSFER))[0]
-    out_row, in_row = transfer_times(final_cursor, shipment_id)
-    sku_id, qty = in_row[2], in_row[3]
-    assert in_row[1] < out_row[1]
+    for shipment_id in labelled(generated_data, settings.ISSUE_TRANSFER):
+        out_row, in_row = transfer_times(final_cursor, shipment_id)
+        sku_id, qty = in_row[2], in_row[3]
+        assert in_row[1] < out_row[1]
+        # Only these two rows change the sum of these two locations at their own second.
+        before = atp.get_network_on_hand(final_cursor, sku_id, in_row[1] - SECOND)
+        assert atp.get_network_on_hand(final_cursor, sku_id, in_row[1]) == before + qty
+        before = atp.get_network_on_hand(final_cursor, sku_id, out_row[1] - SECOND)
+        assert atp.get_network_on_hand(final_cursor, sku_id, out_row[1]) == before - qty
 
-    before = atp.get_network_on_hand(final_cursor, sku_id, in_row[1] - SECOND)
-    during = atp.get_network_on_hand(final_cursor, sku_id, in_row[1])
-    after = atp.get_network_on_hand(final_cursor, sku_id, out_row[1])
-    assert during == before + qty
-    assert after == before
 
-
-def test_transfer_decoy_arrives_one_second_after_it_leaves(generated_data, final_cursor):
+def test_transfer_decoy_leaves_first_and_beats_its_eta(generated_data, final_cursor):
     for shipment_id in decoys(generated_data, settings.ISSUE_TRANSFER):
         out_row, in_row = transfer_times(final_cursor, shipment_id)
-        assert in_row[1] - out_row[1] == SECOND
+        assert in_row[1] > out_row[1]
+        final_cursor.execute("SELECT original_eta_at FROM shipment WHERE shipment_id = %s", (shipment_id,))
+        assert final_cursor.fetchone()[0].date() - in_row[1].date() == timedelta(days=1)
+
+
+def truck_rows(data_dir):
+    """Each transfer with its times, as the shipment and event files show them."""
+    received = {row["shipment_id"]: row["occurred_at"] for row in read_csv(data_dir / "shipment_event.csv")
+                if row["to_status"] == "RECEIVED"}
+    return [dict(row, received_at=received.get(row["shipment_id"]))
+            for row in read_csv(data_dir / "shipment.csv") if row["shipment_type"] == "TRANSFER"]
+
+
+def transfer_case_ids(data_dir):
+    return {row["record_id"] for row in truth_rows(data_dir) if row["looks_like"] == settings.ISSUE_TRANSFER}
+
+
+def road_hours(truck):
+    gap = datetime.fromisoformat(truck["received_at"]) - datetime.fromisoformat(truck["created_at"])
+    return gap.total_seconds() / 3600
+
+
+def test_no_truck_is_on_the_road_for_only_a_moment(generated_data):
+    """Every case used to take one second or less, which gave them all away."""
+    trucks = [truck for truck in truck_rows(generated_data) if truck["received_at"]]
+    assert min(road_hours(truck) for truck in trucks) >= 2
+
+
+def test_normal_trips_vary_by_hours_and_not_only_by_day(generated_data):
+    """A truck sent late used to always come in late, so early trips never took under 9 hours."""
+    cases = transfer_case_ids(generated_data)
+    normal = [road_hours(truck) for truck in truck_rows(generated_data)
+              if truck["received_at"] and truck["shipment_id"] not in cases]
+    assert min(normal) < 6
+    assert len({round(hours) for hours in normal}) > 50
+
+
+def test_case_trucks_take_as_long_as_normal_trucks(generated_data):
+    cases = transfer_case_ids(generated_data)
+    trucks = [truck for truck in truck_rows(generated_data) if truck["received_at"]]
+    normal = [road_hours(truck) for truck in trucks if truck["shipment_id"] not in cases]
+    for hours in (road_hours(truck) for truck in trucks if truck["shipment_id"] in cases):
+        assert min(normal) <= hours <= max(normal)
+    assert len({round(road_hours(truck)) for truck in trucks if truck["shipment_id"] in cases}) > 5
+
+
+def test_case_trucks_are_due_at_the_same_time_of_day_as_normal_trucks(generated_data):
+    cases = transfer_case_ids(generated_data)
+    times_of_day = {truck["original_eta_at"][-8:] for truck in truck_rows(generated_data)}
+    assert times_of_day == {"12:00:00"}
+    assert cases
+
+
+def test_case_trucks_arrive_at_hours_normal_trucks_do(generated_data):
+    cases = transfer_case_ids(generated_data)
+    trucks = [truck for truck in truck_rows(generated_data) if truck["received_at"]]
+    normal_hours = {truck["received_at"][11:13] for truck in trucks if truck["shipment_id"] not in cases}
+    case_hours = {truck["received_at"][11:13] for truck in trucks if truck["shipment_id"] in cases}
+    assert case_hours <= normal_hours
+    assert len(normal_hours) >= 9
+
+
+def test_case_trucks_leave_during_the_hours_normal_trucks_do(generated_data):
+    """The late TRANSFER_OUT is the anomaly. Its time of day shouldn't be a second clue."""
+    rows = [row for row in read_csv(generated_data / "inventory_movement.csv") if row["movement_type"] == "TRANSFER_OUT"]
+    cases = transfer_case_ids(generated_data)
+    normal_hours = {row["occurred_at"][11:13] for row in rows if row["shipment_id"] not in cases}
+    case_hours = {row["occurred_at"][11:13] for row in rows if row["shipment_id"] in cases}
+    assert case_hours <= normal_hours
+
+
+def test_a_normal_truck_leaves_the_ledger_when_it_is_dispatched(generated_data):
+    """Only a labelled anomaly can have its TRANSFER_OUT posted later than the truck left."""
+    dispatched = {row["shipment_id"]: row["occurred_at"] for row in read_csv(generated_data / "shipment_event.csv")
+                  if row["to_status"] == "IN_TRANSIT" and row["from_status"] == "CREATED"}
+    posted_late = {row["shipment_id"] for row in read_csv(generated_data / "inventory_movement.csv")
+                   if row["movement_type"] == "TRANSFER_OUT" and row["occurred_at"] != dispatched[row["shipment_id"]]}
+    assert posted_late == labelled(generated_data, settings.ISSUE_TRANSFER)
+
+
+def test_some_normal_trucks_come_in_early_so_the_decoys_have_company(generated_data):
+    decoy_ids = decoys(generated_data, settings.ISSUE_TRANSFER)
+    early = {truck["shipment_id"] for truck in truck_rows(generated_data) if truck["received_at"]
+             and datetime.fromisoformat(truck["original_eta_at"]).date()
+             > datetime.fromisoformat(truck["received_at"]).date()}
+    assert decoy_ids <= early
+    assert len(early - decoy_ids) > 10 * len(decoy_ids)
+
+
+def test_scheduled_rows_are_not_pushed_to_one_hour(generated_data):
+    """The clock only moves forward, so unsorted times used to bunch up just before 09:00."""
+    hours = Counter(row["occurred_at"][11:13] for row in read_csv(generated_data / "inventory_movement.csv")
+                    if row["movement_type"] == "TRANSFER_IN")
+    assert max(hours.values()) < 0.3 * sum(hours.values())
+
+
+def transfer_rows_on_the_same_truck(final_cursor, generated_data, gap_seconds):
+    """Moves a normal truck's arrival, by a new row, to exactly this long after it left."""
+    cases = transfer_case_ids(generated_data)
+    final_cursor.execute("""SELECT m.shipment_id, m.sku_id, s.to_location_id, m.occurred_at FROM inventory_movement m
+                            JOIN shipment s USING (shipment_id)
+                            WHERE m.movement_type = 'TRANSFER_OUT' AND s.status = 'IN_TRANSIT' AND NOT m.shipment_id = ANY(%s)
+                            ORDER BY m.movement_id LIMIT 1""", (list(cases),))
+    shipment_id, sku_id, location_id, left_at = final_cursor.fetchone()
+    final_cursor.execute(
+        """INSERT INTO inventory_movement (movement_id, sku_id, location_id, movement_type, stock_bucket, quantity,
+                                           occurred_at, reason_code, source_doc, shipment_id)
+           VALUES ('MOV-2026-99999999', %s, %s, 'TRANSFER_IN', 'SELLABLE', 1, %s, 'TEST', 'TEST-1', %s)""",
+        (sku_id, location_id, left_at + timedelta(seconds=gap_seconds), shipment_id),
+    )
+    final_cursor.execute(detect.TRANSFER_SQL)
+    return shipment_id, {row[0] for row in final_cursor.fetchall()}
+
+
+def test_transfer_detector_allows_arriving_one_second_after_leaving(generated_data, final_cursor):
+    """The decoys no longer test this edge, so it is tested on its own."""
+    shipment_id, found = transfer_rows_on_the_same_truck(final_cursor, generated_data, 1)
+    assert shipment_id not in found
+
+
+def test_transfer_detector_flags_arriving_in_the_same_second(generated_data, final_cursor):
+    shipment_id, found = transfer_rows_on_the_same_truck(final_cursor, generated_data, 0)
+    assert shipment_id in found
 
 
 def test_changed_balance_does_not_change_atp(generated_data, final_cursor):

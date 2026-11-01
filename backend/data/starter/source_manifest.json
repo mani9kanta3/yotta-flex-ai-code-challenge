@@ -24,28 +24,28 @@
     "note": "All rows come from this generator. Brands are invented labels, city names are ordinary place names, and there is no personal data."
   },
   "generation_counters": {
-    "walk_in_refused": 729,
-    "reorders_skipped_no_budget": 1,
-    "transfers_short_of_stock": 138,
-    "transfers_late": 256,
-    "returns_good": 588,
-    "returns_damaged": 121,
+    "walk_in_refused": 657,
+    "reorders_skipped_no_budget": 0,
+    "transfers_short_of_stock": 152,
+    "transfers_late": 255,
+    "returns_good": 605,
+    "returns_damaged": 122,
     "returns_refused": 0,
-    "decisions_single": 1153,
-    "decisions_split": 61,
-    "decisions_inbound": 38,
-    "decisions_rejected": 211,
-    "decisions_reallocated": 2,
-    "orders_expired": 154,
+    "decisions_single": 1151,
+    "decisions_split": 53,
+    "decisions_inbound": 21,
+    "decisions_rejected": 213,
+    "decisions_reallocated": 5,
+    "orders_expired": 155,
     "orders_unshipped_no_budget": 0,
-    "late_reallocated": 2,
-    "late_repromised": 11,
-    "late_cancelled": 6,
-    "top_up_sales": 75,
+    "late_reallocated": 5,
+    "late_repromised": 6,
+    "late_cancelled": 1,
+    "top_up_sales": 71,
     "top_up_receipts": 0,
-    "transfers_in_transit_at_end": 67,
-    "units_in_transit_at_end": 827,
-    "oversell_attempts": 25
+    "transfers_in_transit_at_end": 60,
+    "units_in_transit_at_end": 711,
+    "oversell_attempts": 20
   },
   "not_generated_yet": [
     "store-channel orders"
@@ -81,55 +81,55 @@
     },
     "inventory_balance.csv": {
       "rows": 3042,
-      "sha256": "25f717aeabec710282ea53b0b8abd58da870e33811ed35af07a26c93c78038d3"
+      "sha256": "ffbd4d2baf60a052ee7f158433752aefb3d794f87201301b4317a8e519e9b376"
     },
     "orders.csv": {
       "rows": 1000,
-      "sha256": "67aa68dbb1564ad47959d2c4e60ad80c0d78a6326007d407cb670fd3009baf81"
+      "sha256": "d010fd0423a6d3312daf1f9b3348273010308729bb2bf3d9b53d5b28a5d0f8f6"
     },
     "order_line.csv": {
-      "rows": 1463,
-      "sha256": "13db88d16123e521cdeee21e766f226de0d3f5ed80f74bd447eb848a8a4d1e03"
+      "rows": 1438,
+      "sha256": "a75dc5362cacc365d1ba787a6e4c184b1d37a1b77cd31aa05ab64d37cb7bf5d5"
     },
     "shipment.csv": {
-      "rows": 3813,
-      "sha256": "cbdcd7d586c45f9a170b09f1bdf6e621f075e56662df7e32bba51d8cd4a697d4"
+      "rows": 3785,
+      "sha256": "cdd736ffee2e679ece55844554aff2315871439ae74486c262df5aa92e9b105f"
     },
     "reservation.csv": {
-      "rows": 1526,
-      "sha256": "a3b15405a7fce6a31e99581714638ba9da959e5ec5e182549469c4e22fb12884"
+      "rows": 1496,
+      "sha256": "3d7fe8f35854e6898b1b00103bf36d7605f45f9c52e243a6bc9c3f9d98d5685d"
     },
     "order_allocation.csv": {
-      "rows": 1315,
-      "sha256": "39b2ca24c114fb1c38ac512fa631ad03b7f9ff8f2333a7991367b41f8216f252"
+      "rows": 1283,
+      "sha256": "7ec4ef4894f4c38c9f1271d769347179e3a0ed6d91cac936256ee44d7f74be7d"
     },
     "inventory_movement.csv": {
       "rows": 20000,
-      "sha256": "d0d73e1fafd2848982950ad5e1eaf18e52d57d1ecc837ef60eb8ea9f06898117"
+      "sha256": "6e3ad612b475c8cec53134b0bc802fce7be794146a680eb9aec390a568baa20f"
     },
     "allocation_decision.csv": {
-      "rows": 1465,
-      "sha256": "fbb7642bdf1fd41ded848f78e3e2bca3334eb729de4520d8eed362e5a23883d6"
+      "rows": 1443,
+      "sha256": "1159a8dc0f39dea2cb13bd879df01b012ef4d6fb4e1a9b2fd16e87b840b903c3"
     },
     "order_event.csv": {
-      "rows": 7660,
-      "sha256": "feea90f310b779e937c2530196c3cd02cd03af3d7814754e97b4502ecca0ebbd"
+      "rows": 7613,
+      "sha256": "61d945f0f0d53448543bcea5ea8daf6fe6c8b56a5fdde96234328dbaa8b0b40d"
     },
     "reservation_event.csv": {
-      "rows": 3807,
-      "sha256": "9f2e0aa7d1bb6171b83da9352d77f8cac40115c9ca812a86649e6f0a8e5e1c94"
+      "rows": 3736,
+      "sha256": "1786a542b2fc15f0f267ad2d9c398432348dba1a1390e621c70b724771292269"
     },
     "shipment_event.csv": {
-      "rows": 11608,
-      "sha256": "6f82b49f8edb1d5da4a7ba1b91cf3e43d3ff5ced88ac9ed88c06794e0c0974c3"
+      "rows": 11536,
+      "sha256": "12823cfa0feac163c561be76091ce1acef452abdc87c578fd2646e0eec05facd"
     }
   },
   "ground_truth_file": {
-    "rows": 65,
-    "sha256": "60bca66d97a5d2f88236fa0163b5c719ef2a9b2648de5da31f582290012bc1de"
+    "rows": 60,
+    "sha256": "ec3766dcddc58d2f08d9d679c27b1352e93ce25c7422105b3c377b0897698700"
   },
   "atp_checkpoints_file": {
     "rows": 40,
-    "sha256": "255573668678d5120463aa72b21a0a73c679dd5483aa28be3a49c0836938c597"
+    "sha256": "e925ffa0642327bf14d8c0c63a2ea941bdf9f7d8d2f7d0a1abe7f94074fdcfa1"
   }
 }

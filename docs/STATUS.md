@@ -29,7 +29,8 @@ Updated after every step. "Built" means the code exists, it ran, and tests cover
 | Generated orders: expired holds, oversell attempts, splits, inbound, online returns | `generator/order_flow.py` | `test_order_generation.py`, validator |
 | Clean baseline, written before anything is injected | `scripts/generate.py` | Passes every check at both scales |
 | Four labelled anomalies, with decoys | `generator/inject.py` | `test_anomalies.py` |
-| Each case causes only its own problem | `generator/inject.py` | Final data less the labelled rows equals the clean baseline, `test_anomalies.py` |
+| Each case causes only its own problem | `generator/inject.py` | `eval/check_unrelated.py`, run at both scales: final data less the labelled rows equals the clean baseline |
+| Trucks take varied, believable times, and case trucks follow the same rules as normal ones | `generator/simulate.py`, `generator/inject.py` | `test_anomalies.py`, measured at both scales |
 | Everything numbered in time order after injection | `generator/inject.py` | `test_anomalies.py` |
 | Ground truth in its own folder, read only by `eval/` | `generator/export.py`, `eval/` | `test_anomalies.py` |
 | Four detectors, from the ledger and events alone | `app/detect.py`, `scripts/run_detect.py` | `test_anomalies.py` |
@@ -54,7 +55,7 @@ Updated after every step. "Built" means the code exists, it ran, and tests cover
 | Replenishment | Rules are calculated, reorders move through the three levels | First stock for a late SKU or new store is a direct delivery, not a transfer. One reorder at a time per pair, instead of the plan's position formula |
 | Returns | Good and damaged returns in live code and generated data | No return window |
 | Live stock changes | Orders, transfers, shipping, returns and late handling take the SKU-location lock | Walk-in sales, BLOCK and adjustments exist only in the generator, with no live version until the API step |
-| Generated decisions agree with SQL | **At full scale, only a sample of 200 decisions was checked against SQL: 200 of 72,139 on the clean baseline and 200 of 72,339 on the final data.** Every decision was checked at starter scale: all 1,443 on the clean baseline agree, and of all 1,463 on the final data, only the 5 labelled ones differ | More than 72,000 full-scale decisions have not been recalculated. `validate --decisions` can run more, at several queries each |
+| Generated decisions agree with SQL | **At full scale, only a sample of 200 decisions was checked against SQL: 200 of 72,160 on the clean baseline and 200 of 72,360 on the final data.** Every decision was checked at starter scale: all 1,418 on the clean baseline agree, and of all 1,438 on the final data, only the 5 labelled ones differ | More than 72,000 full-scale decisions have not been recalculated. `validate --decisions` can run more, at several queries each |
 | ATP checkpoints | 40 rows at starter and 200 at full, all matching SQL | Only a few moments: 5 events of each of 4 kinds at starter, 25 at full, with a row before and at each |
 
 ## Not built
@@ -78,13 +79,13 @@ Seed 20261022. The final data includes the labelled problems and decoys.
 | Movements, final | 20,000 | 1,000,000 |
 | Orders, clean baseline | 980 | 49,800 |
 | Orders, final | 1,000 | 50,000 |
-| Oversell attempts | 25 | 1,559 |
-| Split allocations | 61 | 2,897 |
-| Lines held on inbound stock | 38 | 1,182 |
-| Orders that expired | 154 | 7,002 |
-| Holds moved off a late truck | 2 | 159 |
-| Promises updated for a late truck | 11 | 289 |
-| Holds cancelled past the limit | 6 | 156 |
+| Oversell attempts | 20 | 1,513 |
+| Split allocations | 53 | 2,950 |
+| Lines held on inbound stock | 21 | 1,191 |
+| Orders that expired | 155 | 6,988 |
+| Holds moved off a late truck | 5 | 120 |
+| Promises updated for a late truck | 6 | 249 |
+| Holds cancelled past the limit | 1 | 177 |
 | Generate, all three folders | about 2 s | about 2 to 4 min |
 | Load, with foreign keys and indexes | about 3 s | about 1 min |
 | Validate, including 200 decisions | about 8 s | about 3 min |
@@ -92,7 +93,7 @@ Seed 20261022. The final data includes the labelled problems and decoys.
 
 The slower full-scale times are from a run sharing the machine with other jobs.
 
-All 689 tests pass, in about 9 minutes.
+All 708 tests pass, in about 9 minutes.
 
 **Validation**
 
@@ -154,9 +155,9 @@ with what `app/atp.py` answers in SQL.
 - All 25 full-scale arrivals leave ATP the same, because inbound stock becomes stock on hand.
   Counting it at both ends would raise ATP at that second.
 - All 25 expiries and all 25 customer cancels give back exactly the units held. A late truck is
-  handled once for all its holds, so 11 of those 25 gave back more than the one hold checked,
+  handled once for all its holds, so 10 of those 25 gave back more than the one hold checked,
   because other holds on that truck ended in the same second.
-- ATP went below zero on 18 of the 200 rows at full scale, as low as -274. A paid hold on an
+- ATP went below zero on 25 of the 200 rows at full scale, as low as -15. A paid hold on an
   overdue truck still counts as reserved, but the truck no longer counts as inbound. `promisable`
   stays at 0, so nothing can be promised from it.
 - **What this doesn't show:** these are a small sample, picked evenly, and only on SKUs with no
@@ -183,66 +184,92 @@ on other seeds at starter scale: both datasets, the ID comparison, the detectors
 
 | Result | Seeds | What happens |
 |---|---|---|
-| No problem | The other 36 | Every check passes or is explained, with scores of 1.0 and every checkpoint matching |
-| Generator refuses to run | 20261037 | `could not place a blocked stock case, no SKU left that it fits`. It stops and writes no final data, rather than place a bad case |
-| Validation fails | 6, 15 | No hold was moved off a late truck, so `generated data includes holds moved off a late truck` fails on both datasets |
-| Validation fails | 20261035 | No hold was cancelled past the limit, so `generated data includes holds cancelled past the late limit` fails on both datasets |
+| No problem | The other 31 | Every check passes or is explained, with scores of 1.0 and every checkpoint matching |
+| Generator refuses to run | 1, 16, 20261023 | `could not place a blocked stock case, no SKU left that it fits`. It stops and writes no final data, rather than place a bad case |
+| Validation fails | 8, 10, 13, 15, 19 | No hold was moved off a late truck, so `generated data includes holds moved off a late truck` fails on both datasets. Seed 15 also has no late-truck checkpoint |
+| Validation fails | 20261025 | No hold was cancelled past the limit, so `generated data includes holds cancelled past the late limit` fails on both datasets |
 
-These three fail because the cases are rare at starter size and depend on chance, not because a rule
-broke. The validator is right to fail them, since a rule can't be shown to work on rows that don't
-exist. Nothing was changed to make them pass.
+**This got worse with the new truck times:** 36 of the same 40 seeds had no problem before, and 31 do
+now. Different seeds fail, so these rare cases seem to depend on chance at starter size, but the exact
+cause wasn't isolated. The default seed passes with little room: it has only 1 hold cancelled past
+the limit at starter scale. The validator is right to fail the others, since a rule can't be shown to
+work on rows that don't exist. Nothing was changed to make them pass.
+
+**Truck times.** Every truck now follows the same rules, in `order_from_source` and `truck_times`:
+
+| | Normal trucks | Anomalies | Decoys |
+|---|---|---|---|
+| Leaves | Store hours | Store hours | Store hours |
+| Due | Noon, 2 or 3 days later | Same | Same |
+| Comes in | 00:00 to 09:00, evenly spread | Same | Same |
+| Comes in the day before it is due | 13.9% | 12.0% | 100%, on purpose |
+| Hours on the road at full scale | 3.0 to 191.3, median 39.1 | 31.3 to 70.8, median 57.7 | 4.5 to 44.7, median 35.1 |
+| TRANSFER_OUT | When it leaves | During store hours, on or after the day it arrives | When it leaves |
+
+The anomaly is still that the stock reaches the destination before it leaves the source. A decoy is a
+short trip that beats its ETA, which looks premature but is valid. It no longer tests the one-second
+edge, so two tests with hand-written rows check the detector there.
 
 **The anomaly pattern.** Each case has to cause only its own problem, so it goes where nothing depends
-on it. That makes the cases look different from normal data. Measured at full scale on the final data:
+on it. That makes the cases look a little different from normal data. Measured at full scale on the
+final data, including how often a record with that pattern really is a case:
 
-| Pattern | Cases | Everything else | Why it is there |
+| Pattern | Cases | Everything else | Records like this that are cases |
 |---|---|---|---|
-| Truck on the road for 1 second or less | 100 of 100 transfer cases | 0 of 81,077 received trucks. The shortest takes 1 day 11 hours | The anomaly is the ledger order, and its events are dated around it |
-| First ETA exactly 2 days out | 100 of 100 transfer cases | 6 of 82,462 trucks | Written that way in `write_transfer_case` |
-| Order is the last one on its SKU | 200 of 200 order cases | 4,124 of 49,800 orders, 8.3% | No later decision may depend on the changed numbers |
-| Order has exactly one line | 200 of 200 order cases | 32,423 of 49,800 orders, 65.1% | So one case stays on one SKU |
-| Order is for exactly 1 unit | 100 of 100 blocked cases | 20,442 of 49,800 orders, 41.0% | Written that way in `write_blocked_case` |
-| Order expired unpaid | 100 of 100 reservation cases | 6,902 of 49,800 orders, 13.9% | So the bad hold lasts only briefly |
-| SKU's last order was before September | 340 of 400 SKUs with a case, 85% | 2,674 of all 4,576 SKUs with orders, 58% | Half of the SKUs stop getting orders, so cases spread out |
+| Truck on the road for 1 second or less | 0 of 100 | 0 of 81,022 | Gone. It was 100 of 100 before |
+| First ETA exactly 2 days out, to the second | 0 of 100 | 4 of 82,375 | Gone. It was 100 of 100 before |
+| Left after the SKU's last order activity, with no other truck of that SKU on the road for 5 days | 100 of 100 | 2,368 of 82,375, 2.9% | 4.05%, the strongest truck pattern left |
+| No other truck of that SKU on the road for 5 days | 100 of 100 | 6,124 of 82,375, 7.4% | 1.61% |
+| Came in the day before it was due | 56 of 100 | 11,280 of 82,375, 13.7% | 0.49% |
+| First ETA 3 days out | 74 of 100 | 19,660 of 82,375, 23.9% | 0.37% |
+| 5 units or fewer | 66 of 100 | 32,497 of 82,375, 39.5% | 0.20% |
+| Never missed its ETA | 100 of 100 | 75,641 of 82,375, 91.8% | 0.13% |
+| Order is the last one on its SKU, with one line | 200 of 200 order cases | 2,056 of 49,800 orders | 8.87%, the strongest order pattern |
+| Order has exactly one line | 200 of 200 order cases | 32,404 of 49,800 orders, 65.1% | 0.61% |
+| Order is for exactly 1 unit | 100 of 100 blocked cases | 20,502 of 49,800 orders, 41.2% | 0.49% |
+| Order expired unpaid | 100 of 100 reservation cases | 6,888 of 49,800 orders, 13.8% | 1.43% |
+| TRANSFER_OUT posted later than the truck left | 50 of 50 anomalies, 0 of 50 decoys | 0 of 82,375 | 100%, but this is the anomaly itself, not a side effect |
 
 What that means:
 
-- **Anyone can find all 100 transfer cases from the road time alone**, anomalies and decoys together.
-  It takes the ledger order to tell one from the other. Last order and one line together narrow all
-  50,000 orders to 2,210, of which 200 are cases.
+- **Nothing outside the anomaly itself picks out the cases any more.** The best truck filter finds them
+  among about 24 times as many normal trucks. Before this change, road time alone found all 100.
+- **Case trucks still differ a little.** They carry fewer units, because they are on quieter SKUs. They
+  go to warehouses more often, which is why more are due in 3 days. None of them misses its ETA.
 - **The four detectors use none of this.** They test the rule each anomaly breaks. So their scores
   aren't inflated by it, and a new bad row with no such pattern is still found, which a test shows.
-- **Don't train a model on this data to find anomalies.** It would learn these patterns and not the
-  problem, and it would score well for the wrong reason.
+- **Don't train a model on this data to find anomalies.** It could still learn these patterns and not
+  the problem, and it would score better than it should.
 
 **Settings chosen to fit the cases.** To make room, half of the SKUs stop getting online orders at a
 random date, and opening damaged stock went from 1% to 8% of pairs. Both change the data for that
-reason alone. Late-truck rates are also set on purpose, so they say nothing about real carriers.
+reason alone. Late-truck rates and the 15% of trucks that come in early are also set on purpose, so they say nothing
+about real carriers.
 
 **Full-scale movements**
 
 | Movement | Rows | Share |
 |---|---|---|
-| SALE, walk-in | 674,702 | 67.5% |
-| SALE, online order | 52,544 | 5.3% |
-| TRANSFER_OUT | 82,562 | 8.3% |
-| TRANSFER_IN | 81,177 | 8.1% |
-| RETURN | 45,485 | 4.5% |
-| ADJUSTMENT | 18,825 | 1.9% |
-| BLOCK | 14,134 | 1.4% |
-| RECEIPT | 12,090 | 1.2% |
-| UNBLOCK | 10,620 | 1.1% |
-| WRITE_OFF | 7,861 | 0.8% |
+| SALE, walk-in | 675,323 | 67.5% |
+| SALE, online order | 52,464 | 5.2% |
+| TRANSFER_OUT | 82,475 | 8.2% |
+| TRANSFER_IN | 81,122 | 8.1% |
+| RETURN | 45,191 | 4.5% |
+| ADJUSTMENT | 18,768 | 1.9% |
+| BLOCK | 14,140 | 1.4% |
+| RECEIPT | 12,082 | 1.2% |
+| UNBLOCK | 10,540 | 1.1% |
+| WRITE_OFF | 7,895 | 0.8% |
 
-- Online returns at full scale: 5,333 rows, 8,549 units.
-- On-hand holds shipped by their first promise: 51,641 of 51,885, which is 99.5%.
-- Holds on trucks shipped by their first promise: 613 of 659, which is 93.0%. This says nothing
+- Online returns at full scale: 5,245 rows, 8,421 units.
+- On-hand holds shipped by their first promise: 51,677 of 51,810, which is 99.7%.
+- Holds on trucks shipped by their first promise: 607 of 654, which is 92.8%. This says nothing
   about real carriers, because late trucks and rush deliveries are set on purpose.
 
 **Where the cases fall.** How far through the data each group sits, as a median at full scale:
-order anomalies 0.45, order decoys 0.41, transfer anomalies 0.36, transfer decoys 0.40. With only 5
-per type at starter, the groups can differ a lot by chance: transfer anomalies sit at 0.04 there
-and transfer decoys at 0.89. So at starter scale, don't read anything into their dates.
+order anomalies 0.52, order decoys 0.41, transfer anomalies 0.37, transfer decoys 0.39. With only 5
+per type at starter, the groups can differ a lot by chance: order anomalies sit at 0.27 there and
+order decoys at 0.05. So at starter scale, don't read anything into their dates.
 
 **Other limits**
 

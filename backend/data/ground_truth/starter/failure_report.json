@@ -6,11 +6,11 @@
       "violations": 5,
       "passed": false,
       "records": [
-        "BAL-0001522",
-        "BAL-0002482",
-        "BAL-0002513",
-        "BAL-0002872",
-        "BAL-0002961"
+        "BAL-0002282",
+        "BAL-0002609",
+        "BAL-0002911",
+        "BAL-0002926",
+        "BAL-0002938"
       ],
       "labelled": 5,
       "missed": [],
@@ -23,11 +23,11 @@
       "violations": 5,
       "passed": false,
       "records": [
-        "SKU-000016",
-        "SKU-000040",
-        "SKU-000071",
-        "SKU-000130",
-        "SKU-000219"
+        "SKU-000140",
+        "SKU-000167",
+        "SKU-000169",
+        "SKU-000184",
+        "SKU-000196"
       ],
       "labelled": 5,
       "missed": [],
@@ -40,11 +40,11 @@
       "violations": 5,
       "passed": false,
       "records": [
-        "RES-ORD-2026-000043-01",
-        "RES-ORD-2026-000530-01",
-        "RES-ORD-2026-000717-01",
-        "RES-ORD-2026-000774-01",
-        "RES-ORD-2026-000890-01"
+        "RES-ORD-2026-000030-01",
+        "RES-ORD-2026-000044-01",
+        "RES-ORD-2026-000052-01",
+        "RES-ORD-2026-000078-01",
+        "RES-ORD-2026-000865-01"
       ],
       "labelled": 5,
       "missed": [],
@@ -57,11 +57,11 @@
       "violations": 5,
       "passed": false,
       "records": [
-        "MOV-2026-00000275",
-        "MOV-2026-00004035",
-        "MOV-2026-00004651",
-        "MOV-2026-00009909",
-        "MOV-2026-00013066"
+        "MOV-2026-00000438",
+        "MOV-2026-00000743",
+        "MOV-2026-00000920",
+        "MOV-2026-00003791",
+        "MOV-2026-00008393"
       ],
       "labelled": 5,
       "missed": [],
@@ -74,11 +74,11 @@
       "violations": 5,
       "passed": false,
       "records": [
-        "SHP-2026-000057",
-        "SHP-2026-000102",
-        "SHP-2026-000147",
-        "SHP-2026-000239",
-        "SHP-2026-000894"
+        "SHP-2026-000048",
+        "SHP-2026-000151",
+        "SHP-2026-000373",
+        "SHP-2026-001998",
+        "SHP-2026-002625"
       ],
       "labelled": 5,
       "missed": [],
@@ -87,14 +87,14 @@
       "issue": "TRANSFER_DOUBLE_COUNTED"
     },
     {
-      "check": "sample of 200 of 1463 order decisions gives the same answer from SQL",
+      "check": "sample of 200 of 1438 order decisions gives the same answer from SQL",
       "violations": 1,
       "passed": false,
       "records": [
-        "ORD-2026-000890-L01"
+        "ORD-2026-000078-L01"
       ],
       "decisions_checked": 200,
-      "decisions_total": 1463,
+      "decisions_total": 1438,
       "labelled": 1,
       "missed": [],
       "unrelated": [],

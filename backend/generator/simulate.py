@@ -452,6 +452,8 @@ class Ledger:
         arrival_day = due
         if late:
             arrival_day = due + timedelta(days=self.rng.randint(*settings.TRANSFER_DELAY_DAYS))
+        elif self.rng.random() < settings.TRANSFER_EARLY_CHANCE:
+            arrival_day = due - timedelta(days=1)
 
         # A truck that arrives after the data ends only ever writes its first row.
         rows_needed = 2 if arrival_day <= config.AS_OF.date() else 1
@@ -486,8 +488,14 @@ class Ledger:
 
     def run_scheduled(self, day):
         """Everything due today. These rows are promised, so they always post."""
-        for action, pair_index, qty, rows, detail in self.scheduled.pop(day, []):
-            moment = self.tick(day_moment(day, self.rng.randint(0, STORE_OPEN_SECONDS)))
+        items = self.scheduled.pop(day, [])
+        # Sorted first, because the clock only moves forward. Otherwise one late time
+        # would push every row after it to the same hour. Shuffled, or a truck sent late
+        # yesterday would always come in late today, and every trip would take the same time.
+        self.rng.shuffle(items)
+        times = sorted(self.rng.randint(0, STORE_OPEN_SECONDS) for _ in items)
+        for (action, pair_index, qty, rows, detail), seconds in zip(items, times):
+            moment = self.tick(day_moment(day, seconds))
             self.pending_rows -= rows
             if action == "RECEIPT":
                 self.receive(pair_index, qty, moment)

@@ -17,7 +17,7 @@ import bisect
 from datetime import timedelta
 
 from app import config, rules
-from generator import export, master, order_flow, settings
+from generator import export, master, order_flow, settings, simulate
 
 ONE_SECOND = timedelta(seconds=1)
 STORE_OPEN_HOURS = 9
@@ -29,6 +29,10 @@ SLOT_TRIES = 10
 # A case goes within this many days of the SKU's last order, so the random stop dates set
 # in the simulator spread the cases over the whole period.
 SLOT_WINDOW_DAYS = 14
+
+# How long a transfer case can last: the longest lead time, then the TRANSFER_OUT posted late.
+TRANSFER_POSTED_LATE_DAYS = 1
+TRANSFER_CASE_HOURS = 120
 
 ONLINE_CHANNELS = ["WEB", "APP", "MARKETPLACE"]
 
@@ -360,13 +364,37 @@ def write_blocked_case(ledger, chosen, sku_id, channel_code, region, result, mom
 
 # ------------------------------------------------------------ transfer cases
 
+def truck_times(rng, moment, lead_time_days, is_decoy):
+    """
+    The same rules as a normal truck: it leaves at this moment, is due by midday after its
+    lead time, and comes in that morning or the morning before. A decoy always comes in
+    early, because a short trip that beats its ETA is what looks premature.
+
+    Only the anomaly's TRANSFER_OUT is different. It is posted during store hours on or
+    after the day the stock arrives, so for those hours the stock counts at both ends.
+    """
+    due = moment.date() + timedelta(days=lead_time_days)
+    early = is_decoy or rng.random() < settings.TRANSFER_EARLY_CHANCE
+    arrival_day = due - timedelta(days=1) if early else due
+    left_at = moment
+    if not is_decoy:
+        left_at = simulate.day_moment(arrival_day + timedelta(days=rng.randint(0, TRANSFER_POSTED_LATE_DAYS)),
+                                      rng.randint(simulate.STORE_OPEN_SECONDS, simulate.STORE_CLOSE_SECONDS))
+    return {
+        "dispatched_at": moment,
+        "eta_at": simulate.day_moment(due, simulate.TRUCK_DUE_SECONDS),
+        "arrived_at": simulate.day_moment(arrival_day, rng.randint(0, simulate.STORE_OPEN_SECONDS)),
+        "left_at": left_at,
+    }
+
+
 def try_transfer(injector, sku_id, is_decoy):
     """
-    The anomaly arrives before it leaves, so for those hours the stock counts at both ends.
-    The decoy arrives one second after leaving, which looks odd but is valid.
+    The anomaly reaches the destination before it leaves the source. The decoy is a short
+    trip that beats its ETA, which looks premature but is valid, because it left first.
     """
     ledger = injector.ledger
-    moment = injector.find_slot(sku_id, 8)
+    moment = injector.find_slot(sku_id, TRANSFER_CASE_HOURS)
     if moment is None:
         return None
     pairs = list(ledger.pairs_of_sku[sku_id])
@@ -376,33 +404,35 @@ def try_transfer(injector, sku_id, is_decoy):
         source_index = ledger.index_of_pair.get((sku_id, destination["rule"]["source_location_id"]))
         if source_index is None or not master.is_pair_live(destination, moment.date()):
             continue
-        spare = spare_sellable(injector.history, source_index, moment)
-        if spare < 1:
+        # What a normal reorder would send, and never more than can safely leave.
+        sellable = stock_at(injector.history, source_index, moment)[0]
+        qty = min(rules.transfer_quantity(destination["rule"]["reorder_qty"], sellable, 0,
+                                          ledger.pairs[source_index]["rule"]["safety_stock"]),
+                  spare_sellable(injector.history, source_index, moment))
+        if qty < 1:
             continue
-        qty = injector.rng.randint(1, min(spare, destination["rule"]["reorder_qty"]))
-        return write_transfer_case(ledger, source_index, destination_index, qty, moment, is_decoy, injector.rng)
+        times = truck_times(injector.rng, moment, destination["rule"]["lead_time_days"], is_decoy)
+        if max(times["left_at"], times["arrived_at"]) > config.AS_OF:
+            continue
+        return write_transfer_case(ledger, source_index, destination_index, qty, times, is_decoy)
     return None
 
 
-def write_transfer_case(ledger, source_index, destination_index, qty, moment, is_decoy, rng):
+def write_transfer_case(ledger, source_index, destination_index, qty, times, is_decoy):
     shipment_index = len(ledger.shipments)
-    if is_decoy:
-        left_at = moment
-        arrived_at = moment + ONE_SECOND
-    else:
-        arrived_at = moment
-        left_at = moment + timedelta(hours=rng.randint(1, 6))
+    dispatched_at = times["dispatched_at"]
+    arrived_at = times["arrived_at"]
+    left_at = times["left_at"]
 
     # The events look normal. Only the two ledger rows are in the wrong order.
-    dispatched_at = moment if is_decoy else moment - ONE_SECOND
     ledger.shipments.append({
         "shipment_type": "TRANSFER",
         "source_index": source_index,
         "destination_index": destination_index,
         "qty": qty,
         "shipped_at": dispatched_at,
-        "original_eta_at": moment + timedelta(days=2),
-        "eta_at": moment + timedelta(days=2),
+        "original_eta_at": times["eta_at"],
+        "eta_at": times["eta_at"],
         "status": "RECEIVED",
         "last_event_at": arrived_at,
         "held": 0,
