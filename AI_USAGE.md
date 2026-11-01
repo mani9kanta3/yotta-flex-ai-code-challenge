@@ -38,39 +38,32 @@ evidence about the code, not evidence of what a person reviewed.
 
 ## My role and use of AI
 
-These paragraphs were drafted with AI from the conversation record at my request. They describe
-what I did, rather than claiming that I personally performed the assistants' checks.
+I used AI to help draft this section from the actions recorded in my conversations.
 
 ### Where AI sped me up
 
-AI helped turn the brief into a plan and then into the schema, generator, rules, tests, API,
-UI and documentation. I used a separate Codex conversation to question the progress reports
-and prepare follow-up instructions. This helped me ask for checks such as reservation expiry,
-two orders competing for the last unit, matching failing record IDs instead of only counts,
-and comparing repeated runs. Those technical suggestions came from AI review.
+Claude Code helped me turn the brief into a plan and build the schema, generator, rules,
+tests, API, UI and documentation. I requested AI-assisted reviews and passed the findings
+back to Claude Code. These covered reservation expiry, two orders asking for the last unit,
+checking failing record IDs instead of only counts, and comparing repeated runs.
 
 ### Where I relied on it heavily
 
-I relied heavily on AI for implementation, SQL, concurrency handling, test design and debugging.
-I asked for simple code that I could explain and a polished UI, but that does not mean I wrote
-the code myself. Later I asked the implementation assistant to finish the remaining work in one
-go, with a final review afterwards. The full-scale performance figures, seed sweeps and deliberate
-bug checks were reported by the implementation assistant. My shared terminal output does not
-independently verify every one of those results.
+I relied heavily on Claude Code for writing the code, SQL, tests and fixes, including handling
+orders at the same time. I asked for simple code that I could explain and a polished UI.
+I also relied on AI review to find problems and suggest checks. The full-scale performance
+figures, runs with other seeds and deliberate-bug checks were reported by the assistants;
+my own shared terminal output does not verify all of them.
 
 ### What I personally reviewed, changed or validated
 
-I ran commands on my laptop and shared their terminal output in the review conversation. The
-shared output includes starting Docker, generating and loading starter data, running validation,
-running pytest, checking ATP and comparing two starter runs. It includes runs reporting 50,
-194 and 353 passing tests, and a starter comparison where all 11 exported files matched.
-These are the checks I can point to from the conversation; they are not a claim that I manually
-checked every row or understood every test.
+I requested reviews, passed the findings to Claude Code, ran the checks I have documented,
+and committed and pushed the changes myself. I read the progress summaries and sent follow-up
+instructions about the problems to fix. The findings and code fixes were AI-assisted; I am
+not claiming that I found or wrote them on my own.
 
-I reviewed the progress summaries, sent follow-up instructions, asked to keep the code simple,
-and committed and pushed changes to GitHub myself. The code fixes identified by the review
-assistant were sent back to the implementation assistant; I am not claiming them as my own
-unaided code changes. I requested a final code review and help drafting this file.
-The repository's later test totals should be read as separate assistant-run results unless I
-provide my own run output. I have not recorded a personal browser walkthrough or a line-by-line
-review of the entire codebase in this conversation.
+On my laptop, I started Docker, generated and loaded starter data, ran validation and pytest,
+checked ATP, and compared two starter runs. I shared terminal output showing 50, 194 and 353
+passing tests at different stages, and a comparison where all 11 starter files matched.
+These are my documented checks, not a claim that I checked every row or every part of the
+code. Later assistant-run test results are separate from these personal runs.
