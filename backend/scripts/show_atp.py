@@ -4,7 +4,7 @@ Print every ATP number for one SKU on one channel, at any time.
 Run:  python -m scripts.show_atp --sku SKU-000001 --channel WEB
       python -m scripts.show_atp --sku SKU-000001 --channel WEB --at "2026-03-01 10:00:00"
 
-The API isn't built yet, so this is how to look at the numbers for now.
+The same numbers as GET /api/atp, in the terminal.
 """
 
 import argparse

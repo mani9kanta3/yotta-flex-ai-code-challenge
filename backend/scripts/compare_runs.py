@@ -6,6 +6,7 @@ Run:  python -m scripts.compare_runs --scale starter
 """
 
 import argparse
+import json
 import shutil
 import sys
 
@@ -66,9 +67,18 @@ def main():
     files_a = files_of_run(folder / "run_a")
     files_b = files_of_run(folder / "run_b")
     different = compare(files_a, files_b)
+
+    # Beside the data, so the report and the page can show the last comparison.
+    result = {"seed": args.seed, "files_compared": len(files_a), "different": different}
+    path = config.DATA_DIR / args.scale / "reproducibility.json"
+    if path.parent.exists():
+        path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+
     if different:
         print(f"NOT reproducible: {len(different)} files differ: {', '.join(different)}")
         sys.exit(1)
+    # Two more copies of the data aren't worth keeping once they have matched.
+    shutil.rmtree(folder)
     print(f"reproducible: all {len(files_a)} files identical")
 
 

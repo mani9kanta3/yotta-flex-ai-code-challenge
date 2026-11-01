@@ -7,3 +7,10 @@ python-dotenv==1.0.1
 
 # Tests
 pytest==8.3.4
+
+# The API
+fastapi==0.115.6
+uvicorn==0.34.0
+
+# Lets the tests call the API without starting a server
+httpx==0.28.1

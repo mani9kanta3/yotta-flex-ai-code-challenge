@@ -1,0 +1,449 @@
+{
+  "dataset": {
+    "scale": "full",
+    "seed": 20261022,
+    "generator_command": "python -m scripts.generate --scale full --seed 20261022",
+    "python_version": "3.12.3",
+    "period": {
+      "start": "2026-01-01 00:00:00",
+      "as_of": "2026-09-30 23:59:59"
+    },
+    "data_source": {
+      "type": "synthetic",
+      "external_data_used": false,
+      "note": "All rows come from this generator. Brands are invented labels, city names are ordinary place names, and there is no personal data."
+    },
+    "not_generated_yet": [
+      "store-channel orders"
+    ],
+    "files": {
+      "product.csv": {
+        "rows": 1515,
+        "sha256": "0c134331e594"
+      },
+      "sku.csv": {
+        "rows": 5000,
+        "sha256": "3520b3bc3c98"
+      },
+      "location.csv": {
+        "rows": 100,
+        "sha256": "be7d4c1df2b8"
+      },
+      "channel.csv": {
+        "rows": 4,
+        "sha256": "25015ee94da7"
+      },
+      "channel_location.csv": {
+        "rows": 210,
+        "sha256": "003d4f96ab74"
+      },
+      "sku_location.csv": {
+        "rows": 76525,
+        "sha256": "34719958a510"
+      },
+      "replenishment_rule.csv": {
+        "rows": 76525,
+        "sha256": "37948dd9b153"
+      },
+      "inventory_balance.csv": {
+        "rows": 153050,
+        "sha256": "02c424d8cfcd"
+      },
+      "orders.csv": {
+        "rows": 50000,
+        "sha256": "98ac48b9e1fc"
+      },
+      "order_line.csv": {
+        "rows": 72360,
+        "sha256": "a781468068a9"
+      },
+      "shipment.csv": {
+        "rows": 130592,
+        "sha256": "7c0e9ce96f9f"
+      },
+      "reservation.csv": {
+        "rows": 75430,
+        "sha256": "01a122cbdf7c"
+      },
+      "order_allocation.csv": {
+        "rows": 68362,
+        "sha256": "6f664f68d1a4"
+      },
+      "inventory_movement.csv": {
+        "rows": 1000000,
+        "sha256": "5cac73c08d04"
+      },
+      "allocation_decision.csv": {
+        "rows": 72480,
+        "sha256": "df379ef62c3e"
+      },
+      "order_event.csv": {
+        "rows": 390522,
+        "sha256": "216308dcd898"
+      },
+      "reservation_event.csv": {
+        "rows": 196802,
+        "sha256": "b74d801eb9e8"
+      },
+      "shipment_event.csv": {
+        "rows": 396728,
+        "sha256": "a2d4d0c2345f"
+      }
+    }
+  },
+  "validation": {
+    "checks": 229,
+    "passed": 224,
+    "expected_failures": [
+      {
+        "check": "closing balance does not reconcile to opening plus ledger",
+        "violations": 50,
+        "issue": "BALANCE_NOT_RECONCILED"
+      },
+      {
+        "check": "network stock plus in transit differs from opening plus outside changes",
+        "violations": 50,
+        "issue": "BALANCE_NOT_RECONCILED"
+      },
+      {
+        "check": "hold above what could be promised when it was placed",
+        "violations": 50,
+        "issue": "RESERVATION_EXCEEDS_AVAILABLE"
+      },
+      {
+        "check": "order sale from the blocked bucket",
+        "violations": 50,
+        "issue": "FULFILLED_FROM_BLOCKED"
+      },
+      {
+        "check": "transfer received at or before it shipped",
+        "violations": 50,
+        "issue": "TRANSFER_DOUBLE_COUNTED"
+      }
+    ],
+    "unexpected_failures": [],
+    "decisions_checked": 200,
+    "decisions_total": 72360
+  },
+  "clean_baseline": {
+    "failed": 0,
+    "checks": 229
+  },
+  "detection": {
+    "BALANCE_NOT_RECONCILED": {
+      "labelled": 50,
+      "flagged": 50,
+      "true_positives": 50,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "decoys": 50,
+      "decoys_flagged": 0
+    },
+    "RESERVATION_EXCEEDS_AVAILABLE": {
+      "labelled": 50,
+      "flagged": 50,
+      "true_positives": 50,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "decoys": 50,
+      "decoys_flagged": 0
+    },
+    "FULFILLED_FROM_BLOCKED": {
+      "labelled": 50,
+      "flagged": 50,
+      "true_positives": 50,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "decoys": 50,
+      "decoys_flagged": 0
+    },
+    "TRANSFER_DOUBLE_COUNTED": {
+      "labelled": 50,
+      "flagged": 50,
+      "true_positives": 50,
+      "false_positives": 0,
+      "false_negatives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "decoys": 50,
+      "decoys_flagged": 0
+    }
+  },
+  "checkpoints": {
+    "by_kind": {
+      "EXPIRY": {
+        "checked": 50,
+        "matched": 50
+      },
+      "TRUCK_ARRIVAL": {
+        "checked": 50,
+        "matched": 50
+      },
+      "CUSTOMER_CANCEL": {
+        "checked": 50,
+        "matched": 50
+      },
+      "LATE_TRUCK_CANCEL": {
+        "checked": 50,
+        "matched": 50
+      }
+    },
+    "differing": 0,
+    "missing_kinds": []
+  },
+  "unrelated_problems": [],
+  "reproducibility": {
+    "seed": 20261022,
+    "files_compared": 40,
+    "different": []
+  },
+  "timings": {
+    "generate": 131.2,
+    "load clean baseline": 50.1,
+    "validate clean baseline": 122.0,
+    "load final data": 50.9,
+    "validate final data": 125.4,
+    "sort failures by record ID": 0.4,
+    "run detectors": 60.6,
+    "score detectors": 0.4,
+    "compare ATP checkpoints": 25.1,
+    "check nothing unrelated changed": 32.9,
+    "same seed twice": 320.8
+  },
+  "decisions": {
+    "total": 72480,
+    "by_code": [
+      {
+        "code": "SINGLE",
+        "decisions": 61151,
+        "share": 0.8437
+      },
+      {
+        "code": "REJECTED",
+        "decisions": 7068,
+        "share": 0.0975
+      },
+      {
+        "code": "SPLIT",
+        "decisions": 2950,
+        "share": 0.0407
+      },
+      {
+        "code": "INBOUND",
+        "decisions": 1191,
+        "share": 0.0164
+      },
+      {
+        "code": "REALLOCATED",
+        "decisions": 120,
+        "share": 0.0017
+      }
+    ]
+  },
+  "holds": {
+    "placed": 68362,
+    "by_status": {
+      "EXPIRED": 10219,
+      "CANCELLED": 3782,
+      "CONSUMED": 52464,
+      "CONFIRMED": 1897,
+      "REJECTED": 7068
+    },
+    "expired": 10219,
+    "expiry_rate": 0.1495
+  },
+  "oversell": {
+    "attempts": 1513,
+    "blocked": 1513,
+    "blocked_rate": 1.0
+  },
+  "promises": {
+    "kept": [
+      {
+        "supply_type": "INBOUND",
+        "shipped": 654,
+        "on_time": 607,
+        "on_time_share": 0.9281
+      },
+      {
+        "supply_type": "ON_HAND",
+        "shipped": 51810,
+        "on_time": 51677,
+        "on_time_share": 0.9974
+      }
+    ],
+    "repromised": 249,
+    "moved": 120,
+    "cancelled": 177
+  },
+  "traceability": {
+    "allocations": 68362,
+    "allocations_linked": 68362,
+    "allocation_share": 1.0,
+    "consumed_holds": 52464,
+    "consumed_with_sale_and_parcel": 52464,
+    "shipment_share": 1.0
+  },
+  "mix": {
+    "movements": [
+      {
+        "movement": "SALE, walk-in",
+        "movements": 675323,
+        "share": 0.6753
+      },
+      {
+        "movement": "TRANSFER_OUT",
+        "movements": 82475,
+        "share": 0.0825
+      },
+      {
+        "movement": "TRANSFER_IN",
+        "movements": 81122,
+        "share": 0.0811
+      },
+      {
+        "movement": "SALE, online order",
+        "movements": 52464,
+        "share": 0.0525
+      },
+      {
+        "movement": "RETURN",
+        "movements": 45191,
+        "share": 0.0452
+      },
+      {
+        "movement": "ADJUSTMENT",
+        "movements": 18768,
+        "share": 0.0188
+      },
+      {
+        "movement": "BLOCK",
+        "movements": 14140,
+        "share": 0.0141
+      },
+      {
+        "movement": "RECEIPT",
+        "movements": 12082,
+        "share": 0.0121
+      },
+      {
+        "movement": "UNBLOCK",
+        "movements": 10540,
+        "share": 0.0105
+      },
+      {
+        "movement": "WRITE_OFF",
+        "movements": 7895,
+        "share": 0.0079
+      }
+    ],
+    "channels": [
+      {
+        "channel": "WEB",
+        "orders": 25121,
+        "order_value": 98225286.0
+      },
+      {
+        "channel": "APP",
+        "orders": 14837,
+        "order_value": 57735579.0
+      },
+      {
+        "channel": "MARKETPLACE",
+        "orders": 10042,
+        "order_value": 35553369.0
+      }
+    ],
+    "order_statuses": [
+      {
+        "status": "FULFILLED",
+        "orders": 35700
+      },
+      {
+        "status": "CANCELLED",
+        "orders": 9498
+      },
+      {
+        "status": "REJECTED",
+        "orders": 3492
+      },
+      {
+        "status": "CONFIRMED",
+        "orders": 1310
+      }
+    ],
+    "months": [
+      {
+        "month": "2026-01",
+        "movements": 102260,
+        "sales": 77876
+      },
+      {
+        "month": "2026-02",
+        "movements": 91830,
+        "sales": 65086
+      },
+      {
+        "month": "2026-03",
+        "movements": 101653,
+        "sales": 72643
+      },
+      {
+        "month": "2026-04",
+        "movements": 98349,
+        "sales": 70425
+      },
+      {
+        "month": "2026-05",
+        "movements": 106314,
+        "sales": 76415
+      },
+      {
+        "month": "2026-06",
+        "movements": 102409,
+        "sales": 73842
+      },
+      {
+        "month": "2026-07",
+        "movements": 148542,
+        "sales": 108015
+      },
+      {
+        "month": "2026-08",
+        "movements": 118393,
+        "sales": 86900
+      },
+      {
+        "month": "2026-09",
+        "movements": 130250,
+        "sales": 96585
+      }
+    ]
+  },
+  "concentration": {
+    "skus_sold": 4952,
+    "top_tenth_skus": 495,
+    "top_tenth_units_share": 0.9131
+  },
+  "network": {
+    "in_transit_trucks": 1353,
+    "in_transit_units": 38362,
+    "damage_events": 7070,
+    "pairs": 76525
+  },
+  "atp_speed": {
+    "skus_timed": 21,
+    "median_ms": 96.8,
+    "slowest_ms": 1251.2
+  }
+}

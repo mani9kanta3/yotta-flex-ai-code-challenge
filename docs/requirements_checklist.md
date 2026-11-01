@@ -1,146 +1,148 @@
 # Requirements checklist
 
-One item for every point in [brief.md](brief.md), plus the working rules. Marked
-done, partial or missing with evidence in Phase 3. Nothing is marked yet.
+One item for every point in [brief.md](brief.md), plus the working rules. Each one is marked
+done, partial or missing against the actual code and output, with its evidence.
+
+**108 done, 4 partial (39, 92, 100, 106), 0 missing.** Numbers are from seed 20261022.
 
 ## Objective
 
-1. Unified view across stores, warehouses, online. Proof: network ATP API.
-2. Accounts for reservations. Proof: ATP test.
-3. Accounts for safety stock. Proof: ATP test.
-4. Accounts for in-transit stock. Proof: transfer test.
-5. Working end-to-end solution. Proof: clean run.
-6. Exposes key decisions. Proof: `allocation_decision`, API.
-7. Exposes exceptions. Proof: `inventory_exception`, API.
-8. Preserves traceability. Proof: order trace API.
-9. Produces measurable outputs. Proof: `metrics.json`.
-10. Multiple related entities. Proof: schema.
-11. Conditional rules. Proof: `rules.py` tests.
-12. At least one exception path. Proof: rejection, short pick, late inbound, detectors.
-13. Meaningful evaluation metrics. Proof: `eval/score.py`.
+1. **Done.** Unified view across stores, warehouses, online. `GET /api/atp` network totals, Availability page, `test_api.py`.
+2. **Done.** Accounts for reservations. `RESERVED_SQL`, `test_orders.py`, checkpoints.
+3. **Done.** Accounts for safety stock. `rules.position`, `test_rules.py`, Availability page.
+4. **Done.** Accounts for in-transit stock. `INBOUND_SQL`, `IN_TRANSIT_SQL`, `test_transfers.py`, truck arrival checkpoints.
+5. **Done.** Working end-to-end solution. `run_all` and the site run from a fresh clone with an empty database.
+6. **Done.** Exposes key decisions. `allocation_decision` with candidates, `/api/orders/{id}/trace`.
+7. **Done.** Exposes exceptions. `inventory_exception`, `/api/exceptions`, Exceptions page.
+8. **Done.** Preserves traceability. `/api/orders/{id}/trace`, `test_every_order_in_the_data_is_fully_traceable`.
+9. **Done.** Produces measurable outputs. `metrics_summary.json`, `/api/metrics`, Evidence page.
+10. **Done.** Multiple related entities. 19 tables in `schema.sql`.
+11. **Done.** Conditional rules. `rules.py`, `test_rules.py`.
+12. **Done.** At least one exception path. Rejection, late trucks, refused short pick and refused returns in tests, and four detectors.
+13. **Done.** Meaningful evaluation metrics. `eval/score.py`, `eval/report.py`.
 
 ## Actors
 
-14. Customer. Proof: place order, ATP.
-15. Store/warehouse operator. Proof: ledger, location exceptions.
-16. Merchandising/e-commerce analyst. Proof: channel ATP, oversell rate.
-17. Operations manager. Proof: exceptions, metrics.
+14. **Done.** Customer. Availability and Orders pages, `POST /api/orders`.
+15. **Done.** Store/warehouse operator. Stock ledger and Trucks pages.
+16. **Done.** Merchandising/e-commerce analyst. Availability by channel, and oversell and decision rates on Overview and Evidence.
+17. **Done.** Operations manager. Exceptions and Evidence pages.
 
 ## Workflow
 
-18. Master data generated first. Proof: generator order.
-19. Transactions use valid parent IDs. Proof: FK checks.
-20. Product/SKU catalog. Proof: `product`, `sku`.
-21. Location hierarchy. Proof: `parent_location_id`.
-22. Opening balances seeded. Proof: OPENING rows.
-23. Receipts. Proof: movement type.
-24. Sales. Proof: movement type.
-25. Returns. Proof: movement type.
-26. Transfers. Proof: OUT and IN rows.
-27. Adjustments. Proof: movement type.
-28. Movements are immutable. Proof: trigger test.
-29. Online reservations with expiry. Proof: `reservation`.
-30. ATP = on-hand minus reserved/blocked plus approved inbound. Proof: SQL and Python agree.
-31. Orders linked to fulfilment location. Proof: `order_allocation`.
-32. State changes kept as events, no overwriting. Proof: event tables.
-33. Outcomes and labels come from documented rules. Proof: `PLAN.md`, code.
+18. **Done.** Master data generated first. `scripts/generate.py`, master tables before the simulation.
+19. **Done.** Transactions use valid parent IDs. `constraints.sql` fails on a bad reference, and the validator counts them, 38 checks.
+20. **Done.** Product/SKU catalog. `product`, `sku`.
+21. **Done.** Location hierarchy. `parent_location_id`, with a CHECK that only the NDC has none.
+22. **Done.** Opening balances seeded. OPENING rows, checks on missing balances.
+23. **Done.** Receipts. 12,082 rows at full scale.
+24. **Done.** Sales. 727,787 rows at full scale.
+25. **Done.** Returns. 45,191 rows at full scale.
+26. **Done.** Transfers. 82,475 out and 81,122 in at full scale, and in-transit trucks at the end.
+27. **Done.** Adjustments. 18,768 rows at full scale.
+28. **Done.** Movements are immutable. Triggers in `schema.sql`, `test_database.py`.
+29. **Done.** Online reservations with expiry. `reservation.expires_at`, 10,219 expired holds at full scale.
+30. **Done.** ATP = on-hand minus reserved/blocked plus approved inbound. `test_python_rule_and_sql_agree_at_every_second_around_each_change`, 200 of 200 checkpoints.
+31. **Done.** Orders linked to fulfilment location. `order_allocation`, 100% linked in the report.
+32. **Done.** State changes kept as events, no overwriting. Three event tables, status checked against the latest event.
+33. **Done.** Outcomes and labels come from documented rules. `docs/PLAN.md`, `generator/inject.py`.
 
 ## Entities
 
-34. All 10 core entities exist. Proof: `test_database.py`.
-35. PK on every entity. Proof: `test_database.py`.
-36. FK on every relationship. Proof: `constraints.sql`.
-37. Cardinality documented. Proof: `PLAN.md` section 3, dictionary.
-38. Optional relationships documented. Proof: `PLAN.md` section 3, dictionary.
-39. Effective dates. Proof: rule, SKU, channel, location.
-40. Lifecycle states. Proof: validator replays transitions.
-41. Bridge tables for N:M. Proof: `sku_location`, `channel_location`, `order_allocation`.
-42. Event history retained. Proof: event tables.
-43. All joins validated. Proof: anti-join checks.
-44. Anomalies labelled, unrelated rows untouched. Proof: injection test.
+34. **Done.** All 10 core entities exist. `test_database.py`.
+35. **Done.** PK on every entity. `test_primary_key_list_is_the_same_as_the_database`.
+36. **Done.** FK on every relationship. `constraints.sql`, `test_foreign_key_list_is_the_same_as_the_database`.
+37. **Done.** Cardinality documented. `docs/DATA_DICTIONARY.md`, Relationships.
+38. **Done.** Optional relationships documented. `docs/DATA_DICTIONARY.md`, Relationships.
+39. **Partial.** Effective dates. Columns exist on SKU, location, channel-location and rule, and SKU launches and stops are generated. Rules and buffers have one version each, with no mid-period change. That was first on the plan's cut list.
+40. **Done.** Lifecycle states. `rules.py` transitions, validator replays every event.
+41. **Done.** Bridge tables for N:M. `sku_location`, `channel_location`, `order_allocation`.
+42. **Done.** Event history retained. `order_event`, `reservation_event`, `shipment_event`.
+43. **Done.** All joins validated. Validator counts broken references for every foreign key.
+44. **Done.** Anomalies labelled, unrelated rows untouched. `eval/check_unrelated.py` at both scales: 0 clean rows changed, every new row labelled.
 
 ## IDs
 
-45. `SKU-000001`. Proof: regex check.
-46. `LOC-000001`. Proof: regex check.
-47. `ORD-2026-000001`. Proof: regex check.
-48. `RES-<order-id>-01`. Proof: regex check.
-49. `MOV-2026-00000001`. Proof: regex check.
-50. `SHP-2026-000001`. Proof: regex check.
+45. **Done.** `SKU-000001`. Format check in the validator.
+46. **Done.** `LOC-000001`. Format check in the validator.
+47. **Done.** `ORD-2026-000001`. Format check in the validator.
+48. **Done.** `RES-<order-id>-01`. Format check in the validator, against its own order.
+49. **Done.** `MOV-2026-00000001`. Format check in the validator.
+50. **Done.** `SHP-2026-000001`. Format check in the validator.
 
 ## Generation steps
 
-51. Dictionary with type, required, allowed values, units, uniqueness, validation rule. Proof: `data_dictionary.md` and a test.
-52. Parents before children. Proof: load order.
-53. IDs deterministic, zero-padded, immutable, consistent. Proof: checksums, FKs.
-54. 5,000 SKUs. Proof: row count.
-55. 100 locations. Proof: row count.
-56. 1,000,000 movements. Proof: row count.
-57. 50,000 orders. Proof: row count.
-58. Overselling attempts. Proof: count.
-59. Expired reservations. Proof: count.
-60. Damaged stock. Proof: count.
-61. In-transit transfers. Proof: count.
-62. Channel-specific buffers. Proof: `channel_location`.
-63. Fixed seed 20261022. Proof: manifest.
-64. Same generator for starter and full. Proof: `--scale`.
-65. Baseline first, then labelled injection. Proof: `inject.py`.
-66. Derived values calculated from source. Proof: arithmetic checks.
-67. Separate ground truth file. Proof: `ground_truth/`.
-68. Ground truth never leaks into features. Proof: leak test.
-69. PK uniqueness check. Proof: validator.
-70. FK integrity check. Proof: validator.
-71. Allowed enums check. Proof: validator.
-72. Date ordering check. Proof: validator.
-73. Arithmetic reconciliation check. Proof: validator.
-74. Lifecycle transitions check. Proof: validator.
-75. Duplicate check. Proof: validator.
-76. Export CSV/JSON/SQL seed. Proof: `data/`.
-77. README. Proof: file.
-78. Schema and data dictionary. Proof: files.
-79. Generator command documented. Proof: README.
-80. Fixed seed documented. Proof: README, manifest.
-81. Source manifest. Proof: `source_manifest.json`.
-82. Validation summary. Proof: `validation_summary.json`.
-83. Regenerate twice, compare counts and checksums. Proof: `compare_runs` output.
+51. **Done.** Dictionary with type, required, allowed values, units, uniqueness, validation rule. `docs/DATA_DICTIONARY.md`, `test_data_dictionary.py`.
+52. **Done.** Parents before children. `TABLE_COLUMNS` order, foreign keys added after.
+53. **Done.** IDs deterministic, zero-padded, immutable, consistent. Same checksums from the same seed, foreign keys pass.
+54. **Done.** 5,000 SKUs. Manifest and validator at full scale.
+55. **Done.** 100 locations. Manifest and validator at full scale.
+56. **Done.** 1,000,000 movements. Exactly 1,000,000, including injected rows.
+57. **Done.** 50,000 orders. Exactly 50,000, including injected rows.
+58. **Done.** Overselling attempts. 1,513 at full scale, all refused.
+59. **Done.** Expired reservations. 10,219 expired holds at full scale.
+60. **Done.** Damaged stock. 7,070 damage events at full scale.
+61. **Done.** In-transit transfers. 1,353 trucks on the road at the end at full scale.
+62. **Done.** Channel-specific buffers. `channel_location.buffer_units`, with different values by channel and location type.
+63. **Done.** Fixed seed 20261022. Manifest, 20261022.
+64. **Done.** Same generator for starter and full. `--scale`, same code at both.
+65. **Done.** Baseline first, then labelled injection. `scripts/generate.py`, the clean baseline is written first.
+66. **Done.** Derived values calculated from source. Closing balances, totals and statuses come from source rows, with checks.
+67. **Done.** Separate ground truth file. `data/ground_truth/`.
+68. **Done.** Ground truth never leaks into features. `test_detectors_and_inputs_never_read_the_answers`, `test_no_input_file_has_a_label_column`.
+69. **Done.** PK uniqueness check. Validator: duplicate primary key, per table.
+70. **Done.** FK integrity check. Validator: reference points at nothing, per foreign key.
+71. **Done.** Allowed enums check. Validator: value not allowed, 22 columns.
+72. **Done.** Date ordering check. Validator: 5 date checks plus time-order checks. Effective ranges are CHECKs.
+73. **Done.** Arithmetic reconciliation check. Validator: closing balance and network reconciliation.
+74. **Done.** Lifecycle transitions check. Validator: illegal transition and event chain checks.
+75. **Done.** Duplicate check. Validator: duplicate documents, and groups that aren't a matching pair.
+76. **Done.** Export CSV/JSON/SQL seed. CSV committed. SQL and JSON come from `scripts/export_seed.py`, which a test loads.
+77. **Done.** README. `README.md`.
+78. **Done.** Schema and data dictionary. `schema.sql`, `constraints.sql`, `docs/DATA_DICTIONARY.md`.
+79. **Done.** Generator command documented. README, manifest.
+80. **Done.** Fixed seed documented. README, manifest.
+81. **Done.** Source manifest. `source_manifest.json` beside each dataset, checksums compared by the validator.
+82. **Done.** Validation summary. `validation_summary.json`.
+83. **Done.** Regenerate twice, compare counts and checksums. `compare_runs`: all 40 files identical at both scales.
 
 ## Edge cases and acceptance criteria
 
-84. Balance doesn't reconcile. Proof: label and detection.
-85. Reservation exceeds available stock. Proof: label and detection.
-86. Order fulfilled from blocked stock. Proof: label and detection.
-87. Transfer counted at both ends prematurely. Proof: label and detection.
-88. Stock balances reconcile. Proof: validator.
-89. ATP follows the rules. Proof: checkpoints.
-90. Reservation expiry releases stock. Proof: test.
-91. All order allocations are traceable. Proof: 100% trace metric.
+84. **Done.** Balance doesn't reconcile. 50 labelled and 50 found at full scale.
+85. **Done.** Reservation exceeds available stock. 50 labelled and 50 found at full scale.
+86. **Done.** Order fulfilled from blocked stock. 50 labelled and 50 found at full scale.
+87. **Done.** Transfer counted at both ends prematurely. 50 labelled and 50 found at full scale, with believable travel times.
+88. **Done.** Stock balances reconcile. Validator on the clean baseline. On the final data, only the labelled ones fail.
+89. **Done.** ATP follows the rules. 200 of 200 checkpoints at full scale. Only 200 of 72,360 decisions were recalculated at full scale.
+90. **Done.** Reservation expiry releases stock. `test_orders.py`, `test_expiry_releases_the_hold_and_shows_atp_before_and_after`, expiry checkpoints.
+91. **Done.** All order allocations are traceable. 68,362 of 68,362 allocations, 52,464 of 52,464 used holds.
 
 ## Evaluation focus
 
-92. (a) Realistic distributions. Proof: validation summary.
-93. (b) Consistent IDs, valid joins. Proof: validator.
-94. (c) Lifecycle and dependency consistency. Proof: validator.
-95. (d) Correct derived values. Proof: validator.
-96. (e) Normal, boundary, failure, exception coverage. Proof: decoys, counts.
-97. (f) Separate ground truth. Proof: folder, leak test.
-98. (g) Reproducibility, documentation, provenance. Proof: manifest, compare.
+92. **Partial.** (a) Realistic distributions. Weekend and July patterns, varied trips and quantities exist. Sales are too concentrated: the top tenth of SKUs takes 91% of units. Case patterns are measured in `docs/STATUS.md`.
+93. **Done.** (b) Consistent IDs, valid joins. Validator format and reference checks.
+94. **Done.** (c) Lifecycle and dependency consistency. Validator event checks.
+95. **Done.** (d) Correct derived values. Validator, `test_generator.py`.
+96. **Done.** (e) Normal, boundary, failure, exception coverage. Decoys, oversell attempts, late trucks and refusals, with counts in the report.
+97. **Done.** (f) Separate ground truth. `data/ground_truth/`, leak tests.
+98. **Done.** (g) Reproducibility, documentation, provenance. Manifest, `compare_runs`, README, data dictionary.
 
 ## Public data and deliverables
 
-99. Lawful data: fully synthetic, stated in the manifest. Proof: manifest.
-100. Public GitHub repo, pushed by Manikanta. Proof: link.
-101. README: problem, install, configure, run, verify, assumptions, decisions, tradeoffs, testing, limitations, how we know it works. Proof: section review.
-102. Starter dataset in the repo. Proof: `data/starter`.
-103. One command recreates the full dataset. Proof: run it.
-104. Tests. Proof: pytest output.
-105. `prompt-history/` folder. Proof: folder.
-106. `AI_USAGE.md`, with personal parts left for Manikanta. Proof: file.
+99. **Done.** Lawful data: fully synthetic, stated in the manifest. Manifest `data_source`, no external data.
+100. **Partial.** Public GitHub repo, pushed by Manikanta. Pushed by Manikanta during the build. The final commit is theirs to push.
+101. **Done.** README: problem, install, configure, run, verify, assumptions, decisions, tradeoffs, testing, limitations, how we know it works. `README.md`, every section.
+102. **Done.** Starter dataset in the repo. `backend/data/starter/`.
+103. **Done.** One command recreates the full dataset. `python -m scripts.run_all --scale full`, run. Also `scripts.generate` on its own.
+104. **Done.** Tests. `backend/tests/`, all passing.
+105. **Done.** `prompt-history/` folder. `prompt-history/`, 9 files. Short messages like asking if a run finished aren't included.
+106. **Partial.** `AI_USAGE.md`, with personal parts left for Manikanta. `AI_USAGE.md` has what the record shows. The personal parts are left for Manikanta, as asked.
 
 ## Added after review
 
-107. Reserved stock at a past time comes from events. Proof: test.
-108. BLOCK and UNBLOCK don't change total stock. Proof: `test_generator.py`, `test_database.py`, validator.
-109. Orders on inbound stock wait for arrival, with a promised date and late handling. Proof: test.
-110. Concurrent orders lock sorted SKU-location rows and recalculate after the lock. Proof: race test.
-111. Reaching the exact movement count never writes an invalid sale. Proof: top-up tests, validator.
-112. Docker setup kept. Proof: `docker-compose.yml`.
+107. **Done.** Reserved stock at a past time comes from events. `test_orders.py`, `test_rules.py`.
+108. **Done.** BLOCK and UNBLOCK don't change total stock. `test_generator.py`, `test_database.py`, validator.
+109. **Done.** Orders on inbound stock wait for arrival, with a promised date and late handling. `test_transfers.py`, `test_late_trucks.py`, `test_order_on_a_truck_waits_then_ships_when_it_arrives`.
+110. **Done.** Concurrent orders lock sorted SKU-location rows and recalculate after the lock. `test_orders.py`, `test_twenty_orders_for_one_unit_through_the_api_gives_one_winner`.
+111. **Done.** Reaching the exact movement count never writes an invalid sale. `test_generator.py`, validator.
+112. **Done.** Docker setup kept. `docker-compose.yml`, used in the clean run.

@@ -42,6 +42,11 @@ Updated after every step. "Built" means the code exists, it ran, and tests cover
 | Data files compared with the manifest by checksum | `scripts/validate.py` | `test_validator.py` |
 | Data dictionary, compared with the real database and data by a test | `docs/DATA_DICTIONARY.md` | `test_data_dictionary.py` |
 | Every check run on other seeds with one command | `eval/try_seeds.py` | 40 seeds run, see Known problems |
+| API for ATP, orders, trace, ledger, trucks, returns, exceptions and metrics | `app/main.py`, `app/views.py`, `app/trace.py` | `test_api.py`, including 20 orders racing for one unit through the API |
+| React page on real data, one view per actor | `frontend/src/` | Checked by hand in a browser, see Partly built |
+| Everything in one command | `scripts/run_all.py` | Run at both scales, `test_outputs.py` |
+| Every measured number in one file, with no record IDs | `eval/report.py` | `test_outputs.py`, served at `/api/metrics` |
+| The same data as SQL and JSON | `scripts/export_seed.py` | `test_outputs.py` loads the SQL into an empty database |
 | Starter data, ground truth and metrics ready to commit | `backend/data/starter/`, `backend/data/ground_truth/starter/` | Manifest checksums, `.gitattributes` |
 | Live numbering carries on after a load | `db/constraints.sql` | `test_order_flow.py` |
 
@@ -49,25 +54,24 @@ Updated after every step. "Built" means the code exists, it ran, and tests cover
 
 | Feature | What works | What is missing |
 |---|---|---|
-| Orders | Online orders through function calls, tests and generated data | STORE orders raise `NotImplementedError`. No API yet |
+| Orders | Online orders through function calls, tests and generated data | STORE orders raise `NotImplementedError`, and the API answers 501 |
 | Shipping | One parcel per location, delivery, refusal on a short pick | A short pick is only refused, nothing re-allocates it. An order ships whole, never line by line |
-| Late trucks | Handled when the notice comes in, and by `handle_overdue_trucks` | Nothing runs `handle_overdue_trucks` on a schedule yet. That arrives with the API step |
+| Late trucks | Handled when the notice comes in, and by `handle_overdue_trucks` | `handle_overdue_trucks` runs when asked, by a button and `POST /api/trucks/handle-overdue`. Nothing runs it on a schedule |
 | Replenishment | Rules are calculated, reorders move through the three levels | First stock for a late SKU or new store is a direct delivery, not a transfer. One reorder at a time per pair, instead of the plan's position formula |
 | Returns | Good and damaged returns in live code and generated data | No return window |
-| Live stock changes | Orders, transfers, shipping, returns and late handling take the SKU-location lock | Walk-in sales, BLOCK and adjustments exist only in the generator, with no live version until the API step |
+| React page | Every page, the order flow and truck actions, checked by hand in a browser, in light and dark, and at phone width | No automated browser tests. Tested by hand on the starter data, and opened on the full data |
+| Login | Nothing | There is none. Anyone who can reach the local API can write. It is a local demo of the rules |
+| AI_USAGE.md | What the record shows | The personal parts are left for Manikanta to write |
+| Live stock changes | Orders, transfers, shipping, returns and late handling take the SKU-location lock | Walk-in sales, BLOCK, UNBLOCK, WRITE_OFF and adjustments exist only in the generator, with no live version |
 | Generated decisions agree with SQL | **At full scale, only a sample of 200 decisions was checked against SQL: 200 of 72,160 on the clean baseline and 200 of 72,360 on the final data.** Every decision was checked at starter scale: all 1,418 on the clean baseline agree, and of all 1,438 on the final data, only the 5 labelled ones differ | More than 72,000 full-scale decisions have not been recalculated. `validate --decisions` can run more, at several queries each |
 | ATP checkpoints | 40 rows at starter and 200 at full, all matching SQL | Only a few moments: 5 events of each of 4 kinds at starter, 25 at full, with a row before and at each |
 
 ## Not built
 
-| Feature | Planned step |
+| Feature | Why |
 |---|---|
-| Tuning, if the movement mix needs it | 7 |
-| API | 9 |
-| React page | 10 |
-| `run_all` command, README and AI_USAGE.md | 11 |
-| STORE orders | No step. Walk-in sales cover the store channel, and the brief doesn't name STORE orders. Build only if time is left |
-| SQL or JSON copies of the seed data | The brief says "CSV/JSON/SQL". Only CSV is exported, with JSON for the manifest and reports. Decide in step 11 |
+| STORE orders | Walk-in sales cover the store channel, and the brief doesn't name STORE orders |
+| A deployed site | The brief asks for working code in a repo. It runs locally |
 
 ## Measured so far
 
@@ -86,14 +90,13 @@ Seed 20261022. The final data includes the labelled problems and decoys.
 | Holds moved off a late truck | 5 | 120 |
 | Promises updated for a late truck | 6 | 249 |
 | Holds cancelled past the limit | 1 | 177 |
-| Generate, all three folders | about 2 s | about 2 to 4 min |
-| Load, with foreign keys and indexes | about 3 s | about 1 min |
-| Validate, including 200 decisions | about 8 s | about 3 min |
-| Detect | under 1 s | about 1 min |
+| Generate, all three folders | about 2 s | 131 s |
+| Load, with foreign keys and indexes | about 3 s | 51 s |
+| Validate, including 200 decisions | about 9 s | 125 s |
+| Detect | under 1 s | 61 s |
+| Everything, with `run_all` | 36 s | 920 s |
 
-The slower full-scale times are from a run sharing the machine with other jobs.
-
-All 708 tests pass, in about 9 minutes.
+All 777 tests pass, from a fresh clone with an empty database, using only the README's commands.
 
 **Validation**
 

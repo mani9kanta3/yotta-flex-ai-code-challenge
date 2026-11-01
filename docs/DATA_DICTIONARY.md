@@ -500,3 +500,9 @@ Written beside a dataset by `scripts.validate`.
 
 **These IDs are findings, not answers.** They come from running SQL on the data, and the
 validator never reads the ground truth. Nothing reads this file except `eval/check_failures.py`.
+
+### metrics_summary.json
+
+Written beside the final data by `eval.report`, and served at `/api/metrics`. Totals and rates only, with
+no record IDs, so the API can show the scores without ever reading the answers. `run_timings.json` and
+`reproducibility.json` sit beside it and feed into it.

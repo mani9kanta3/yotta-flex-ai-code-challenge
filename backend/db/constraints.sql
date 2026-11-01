@@ -69,6 +69,11 @@ CREATE INDEX shipment_transfer_destination ON shipment (to_location_id, transfer
 CREATE INDEX shipment_transfer_sku ON shipment (transfer_sku_id);
 CREATE INDEX movement_shipment ON inventory_movement (shipment_id);
 CREATE INDEX movement_related ON inventory_movement (related_movement_id);
+-- Following one order through its chain, for the trace page.
+CREATE INDEX decision_line ON allocation_decision (order_line_id);
+CREATE INDEX reservation_line ON reservation (order_line_id);
+CREATE INDEX reservation_inbound ON reservation (inbound_shipment_id);
+CREATE INDEX shipment_order ON shipment (order_id);
 
 -- Live records carry on numbering after the loaded ones. Otherwise the first
 -- transfer shipped after a load would collide with a generated ID.

@@ -27,3 +27,9 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# The same data again as SQL and JSON. scripts/export_seed.py recreates it.
+backend/data/seed/
+
+# Local settings for the editor.
+.claude/
