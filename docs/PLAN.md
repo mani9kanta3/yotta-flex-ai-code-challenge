@@ -261,16 +261,27 @@ A reservation has `supply_type` ON_HAND or INBOUND, and it is never a mix of bot
    post before the TRANSFER_IN. All the holds of an order ship together, so one line
    on a truck holds up the whole order. **Tradeoff:** one parcel per location, but
    a customer can wait longer for the items already on the shelf.
-4. **Late arrival.** When the ETA passes without arrival:
-   - The shipment gets a new event with status IN_TRANSIT, reason ETA_MISSED and a
-     new ETA.
-   - Each waiting reservation first tries another location with on-hand stock. If
-     found: the old one is CANCELLED with reason INBOUND_LATE_REALLOCATED, and a new
-     `-02` reservation is created.
-   - Otherwise it gets a new promised date through a CONFIRMED to CONFIRMED event
-     with reason INBOUND_LATE_REPROMISED. The original promise stays in history.
-   - If the delay passes 3 days after the first promise, it is CANCELLED with reason
-     INBOUND_LATE_CANCELLED, which releases the hold.
+4. **Late arrival (changed).** When the ETA passes without arrival, the shipment gets a
+   new event with status IN_TRANSIT, reason ETA_MISSED and a new ETA. Then for each paid
+   reservation on the truck, oldest first, `rules.late_truck_action` picks the first of:
+   - The first promise can still be kept: nothing changes.
+   - One location has the whole quantity on hand: the old reservation is CANCELLED with
+     reason INBOUND_LATE_REALLOCATED, and a new `-02` reservation is created, already
+     CONFIRMED because the customer has paid.
+   - The new promise is more than 3 days after the first promise: CANCELLED with reason
+     INBOUND_LATE_CANCELLED, which releases the hold. Exactly 3 days is still allowed.
+   - The promise has slipped: a CONFIRMED to CONFIRMED event with reason
+     INBOUND_LATE_REPROMISED carries the new date.
+
+   The first promise stays on the reservation row and each later one is an event, so
+   history shows them all. The limit counts from the first promise, so small repeated
+   delays can't stretch it. A waiting hold looks for another location again every day,
+   because stock may turn up after the first notice.
+
+   **Not reserved twice:** the old hold is cancelled and the new one created at one
+   timestamp in one transaction, with the same locks as a new order. So no moment shows
+   both holding stock. The stock is read before the old hold lets go, so a decision can't
+   count units it is about to give up, which can miss a move but can't oversell.
 5. **Measured:** promises kept on time, re-promised, reallocated and cancelled.
 
 ### Concurrent allocation (changed)
@@ -362,8 +373,43 @@ moment the reorder fires. The source keeps its own safety stock back and sends w
 can spare, and if it can spare nothing, no truck leaves and the source is asked to refill
 itself. A refused walk-in sale asks again, so a store can't stay empty for good.
 
-**Changed:** the plan said to use `heapq` for an event queue. A dict of days holds the
-same promises with less to explain, and every event here only needs to know its day.
+**Changed:** the plan said to use `heapq` for an event queue. Two simpler things do the
+job. A dict of days holds what is due on a later day, like a truck or a return. A sorted
+list holds what is due at an exact time, like a hold expiring or a customer paying, and
+the clock runs those as it passes them. So every decision reads the stock as it was at
+that very moment. Actions in the list never write a movement, so they can't touch the
+budget or run into each other.
+
+### Generated orders
+
+Randomness only decides what a customer asks for and does, and a rule decides the rest.
+
+| Input, decided at random | What follows from a rule |
+|---|---|
+| Channel, region, SKUs, quantity | The allocation decision, using `rules.allocate`, the same code the live orders use |
+| Pays, cancels or never responds | CONFIRMED, CANCELLED, or EXPIRED at exactly `expires_at` |
+| Asks for more than the network can promise | REJECTED with reason INSUFFICIENT_ATP, or NO_CANDIDATE_LOCATION if nothing stocks it |
+| Asks for one more than the best location has | SPLIT if two locations cover it |
+| Asks for more than two locations have, with a truck due | INBOUND if the truck covers it |
+| Truck runs late, by how long | Reallocate, re-promise or cancel, by the rule above |
+| Comes back after delivery, how many | RETURN against that SALE, up to what was sold |
+
+**Exact counts:** each order not placed yet holds back 2 rows from the budget, and a paid
+order promises one row per hold. The orders per day follow the same weekly pattern as the
+walk-ins. Each day takes its share of what is left, so the last day's share is all of it.
+Any rows still free at the end go to the
+same top-up as before, so both counts land exactly, and no sale is forced.
+
+**Same rules, two places:** `generator/order_flow.py` follows the same steps as the live
+code in `app/`, on running counts instead of the database. The validator recalculates a
+sample of 200 decisions in SQL at each scale and runs the same rule on them, and the tests
+do it for every decision in their dataset. A difference fails the run.
+
+**Tradeoffs:** a truck someone is waiting on runs late more often (35%) than one nobody is
+waiting on (8%), because too few orders would meet a late truck otherwise. When a paid order
+is left waiting, the NDC rushes a delivery in half the time, so moving a hold doesn't depend on
+luck. The late-truck rates therefore say nothing about real carriers. An order placed on the last day can still
+be open when the data ends, as it would be in a real extract.
 
 ### Transfers (changed)
 
@@ -426,25 +472,66 @@ nothing physically moved. Only a reservation event is written.
 ## 6. The four anomalies
 
 Each one is self-contained and passes every FK. Only its business meaning is wrong.
-Each is placed only where a replay shows later stock stays valid, so unrelated rows
-aren't damaged.
 
 | Issue | What gets injected | What stays untouched | How it's detected | Recommended action |
 |---|---|---|---|---|
-| `BALANCE_NOT_RECONCILED` | One stored CLOSING `on_hand` changed by a small amount | All movements | Stored value differs from opening + ledger | Recount. ATP keeps using the ledger |
-| `RESERVATION_EXCEEDS_AVAILABLE` | New order with a CONFIRMED hold above promisable. Its decision row shows a stale ATP, as if a cache was out of date | All other reservations | Recalculate promisable at `created_at` without trusting the log | Cancel or reallocate |
+| `BALANCE_NOT_RECONCILED` | One stored CLOSING `on_hand` changed by 1 to 3 units | All movements | Stored value differs from opening + ledger | Recount. ATP keeps using the ledger |
+| `RESERVATION_EXCEEDS_AVAILABLE` | New order with a hold 1 to 3 units above what could be promised. Its decision row shows a stale ATP, as if a cache was out of date. **Changed:** it expires unpaid rather than staying CONFIRMED, so it holds stock only briefly and looks like thousands of other expired orders | All other reservations | Recalculate from the ledger and events at `created_at`, without trusting the log | Cancel or reallocate |
 | `FULFILLED_FROM_BLOCKED` | New order whose SALE draws from the BLOCKED bucket, as if a damaged bin was scanned | Sellable stock | SALE row with bucket BLOCKED | Quarantine and review |
-| `TRANSFER_DOUBLE_COUNTED` | New transfer whose TRANSFER_IN time is before its TRANSFER_OUT | All other transfers | IN before OUT on the same shipment | Exclude from ATP until received |
+| `TRANSFER_DOUBLE_COUNTED` | New transfer whose TRANSFER_IN is 1 to 6 hours before its TRANSFER_OUT | All other transfers | IN at or before OUT on the same shipment | Exclude from ATP until received |
 
 **Decoys** are valid rows that look suspicious. They appear in ground truth with
 `expected_issue = NONE`, and a detector that flags one counts as a false positive.
 
 | Decoy for | Example |
 |---|---|
-| Balance | A pair whose movements net to exactly zero |
-| Reservation | Quantity exactly equal to promisable |
+| Balance | A pair with real movements that net to exactly zero |
+| Reservation | Quantity exactly equal to what could be promised |
 | Blocked | SALE from SELLABLE at a location that also holds blocked stock |
 | Transfer | Received 1 second after shipping |
+
+**Each case causes only its own problem.** A row added in the past changes the answer to every
+later question about that SKU, so a case has to fit these rules or it isn't placed:
+
+1. Each SKU takes one case at most, so cases can't interact.
+2. A case goes after the SKU's last order activity, with no truck on the road for it, so no
+   later order decision depends on the changed numbers.
+3. Stock a case takes has to still be there at every later row in the ledger.
+4. An order case only goes where the allocation rule would really pick that location.
+
+If not enough SKUs fit, the generator stops with an error rather than place a bad case.
+
+**Spreading cases over the period.** Rule 2 alone put them about 95% of the way through the
+data, because ordinary orders touch almost every SKU until near the end, and the date would
+have given them away. So half of the SKUs stop getting online orders at a random date, and a
+case goes within 14 days after a SKU's last order.
+
+**Tradeoff:** a labelled case is always on a SKU with no later orders. No detector uses that,
+but it is a pattern a reader could spot.
+
+**Order of work** (brief, step 5: baseline first, then edge cases):
+
+1. Simulate the clean baseline, smaller than the target by exactly what gets injected, and
+   write it to `data/<scale>_clean/`.
+2. Add every case, then number all IDs and source documents again in time order, so a high
+   ID can't give one away.
+3. Write the final data to `data/<scale>/`, and the answers to `data/ground_truth/<scale>/`.
+
+| Added per case | Movements | Orders |
+|---|---|---|
+| Balance, anomaly or decoy | 0 | 0 |
+| Reservation, anomaly or decoy | 0 | 1 |
+| Blocked, anomaly or decoy | 1 | 1 |
+| Transfer, anomaly or decoy | 2 | 0 |
+
+At full scale that is 300 movements and 200 orders, so the baseline is 999,700 and 49,800,
+and the final data is exactly 1,000,000 and 50,000.
+
+**Expected and unexpected failures.** The validator doesn't know what was injected, so it
+reports every failure on the final data and exits 1. `eval/check_failures.py` then reads
+that report next to the ground truth. A failure is expected only if labelled records
+explain its exact count. Anything else is unexpected, including a labelled problem
+the validator missed, and that command exits 1.
 
 ## 7. Scale
 
@@ -485,8 +572,8 @@ most movements must be sales with no order, which is also how a real store works
 
 | Brief says | Where it is | How we prove it |
 |---|---|---|
-| 10 core entities | Section 1 | `test_schema.py` checks each table exists |
-| PK for every entity | Section 1 | `test_schema.py` checks every table has a PK |
+| 10 core entities | Section 1 | `test_database.py` checks each table exists |
+| PK for every entity | Section 1 | `test_database.py` checks every table has a PK |
 | FK for every relationship | Section 3, `constraints.sql` | Schema load, validator anti-joins |
 | Cardinality, optional | Section 3 | This table, data dictionary |
 | Effective dates | Section 3 | Validator date checks |
@@ -516,11 +603,11 @@ includes them.
 | 1 | Docker, schema, setup, small generator run: master data, opening balances, receipts, walk-in sales, damage, exact count, load, validate, tests | 2.5h |
 | 2 | `rules.py` in full: reserved from events, inbound, ATP, allocation, tests | 1.5h |
 | 3 | Transfers, returns and shipping in live code, transfers and returns in the simulator | 2h |
-| 4 | Simulator: orders, reservations, inbound promises, customer shipments. Live and simulated: late arrival handling, STORE orders | 3h |
-| 5 | Injection, ground truth, final numbering | 1h |
+| 4 | Simulator: orders, reservations, inbound promises, customer shipments, online returns. Live and simulated: late arrival handling | 3h |
+| 5 | Injection, ground truth, final numbering, detectors and scoring, moved up from step 8 | 2h |
 | 6 | Full validator, data dictionary, manifest | 1.5h |
 | 7 | Full 1M run, tuning, reproducibility | 1h |
-| 8 | Detectors and scoring | 1.5h |
+| 8 | Done in step 5 | 0h |
 | 9 | API with locked order flow and race tests | 2h |
 | 10 | React page | 1.5h |
 | 11 | Phase 3 check, clean run, README, AI_USAGE | 3h |
@@ -573,15 +660,17 @@ Django.
 | `backend/app/reservations.py` | Confirm, cancel, expire | Built |
 | `backend/app/movements.py` | Writes one ledger row | Built |
 | `backend/app/transfers.py` | Ship, delay and receive a truck | Built |
-| `backend/app/shipping.py` | Ship a paid order, wait for its truck | Built, delivery and late handling not built |
+| `backend/app/shipping.py` | Ship a paid order, wait for its truck, record delivery | Built |
+| `backend/app/late_trucks.py` | Move, re-promise or cancel holds on a late truck | Built |
 | `backend/app/returns.py` | A return that names its sale | Built |
-| `backend/app/detect.py` | The four detectors, SQL only | Later |
+| `backend/app/detect.py` | The four detectors, SQL only | Built |
 | `backend/app/trace.py` | Order to movement chain | Later |
 | `backend/app/main.py` | The API | Later |
 | `backend/generator/settings.py` | Scale presets and ratios | Built |
 | `backend/generator/master.py` | Products to opening balances | Built |
-| `backend/generator/simulate.py` | The ledger, day by day | Built except orders |
-| `backend/generator/inject.py` | Labelled anomalies and decoys | Later |
+| `backend/generator/simulate.py` | The ledger, day by day | Built |
+| `backend/generator/order_flow.py` | Generated online orders, same rules as `app/` | Built |
+| `backend/generator/inject.py` | Labelled anomalies and decoys, final numbering, ground truth rows | Built |
 | `backend/generator/export.py` | CSV, checksums, manifest | Built |
 | `backend/scripts/generate.py` | The generator command | Built |
 | `backend/scripts/setup_database.py` | Create database and tables | Built |
@@ -589,11 +678,14 @@ Django.
 | `backend/scripts/validate.py` | SQL checks, writes the summary, exits 1 on failure | Built for what is generated so far |
 | `backend/scripts/show_atp.py` | Prints ATP numbers until the API exists | Built |
 | `backend/scripts/compare_runs.py` | Two runs, same seed, compare | Built |
-| `backend/scripts/run_detect.py`, `run_all.py` | Detectors, then everything | Later |
-| `backend/eval/score.py` | Precision, recall, `metrics.json` | Later |
+| `backend/scripts/run_detect.py` | Runs the detectors, fills `inventory_exception` | Built |
+| `backend/scripts/run_all.py` | Everything in one command | Later |
+| `backend/eval/score.py` | Precision, recall, `metrics.json` | Built |
+| `backend/eval/check_failures.py` | Sorts validator failures into expected and unexpected | Built |
 | `backend/tests/` | Tests | Started |
-| `backend/data/starter/` | Committed once final | Later |
-| `backend/data/full/` | Gitignored, regenerated by command | Works |
+| `backend/data/starter/` | Final starter data, committed | Built |
+| `backend/data/ground_truth/starter/` | Starter answers and metrics, committed | Built |
+| `backend/data/full/`, `*_clean/`, `ground_truth/full/` | Gitignored, regenerated by command | Works |
 | `frontend/src/` | One page | Later |
 
 Libraries are `psycopg2-binary`, `python-dotenv` and `pytest` so far. FastAPI, uvicorn,
@@ -606,16 +698,21 @@ Randomness only decides inputs, such as whether a customer pays and when. The st
 then follows from a rule. No payment before `expires_at` means EXPIRED.
 
 `ground_truth.csv` holds the injected anomalies with expected and actual values and the
-expected decision, the decoys, the oversell attempts with their expected rejection, and
-ATP checkpoints, which are the simulator's running answer at sampled times.
+expected decision, the decoys, and the oversell attempts with their expected rejection.
+
+**Changed:** the ATP checkpoints planned here aren't written. The validator recalculates order
+decisions in SQL instead, which is the same comparison of two separate calculations. At full
+scale it checks a sample of only 200 decisions. Every decision was checked at starter scale.
 
 How it stays out of the input data:
 
 - It is in a separate folder and is never loaded into Postgres.
-- Only `eval/score.py` reads it, and a test fails if `ground_truth` appears in `app/`.
-- No input table has an `issue_type` column.
-- Orders and movements are numbered after injection, in time order, so an ID can't give
-  a row away.
+- Only `eval/` reads it, and a test fails if `ground_truth` appears in `app/` or in the
+  loader, the validator or the detector command.
+- No input table has an `issue_type` column. `inventory_exception` has one, but that is
+  detector output.
+- Orders, shipments, allocations, movements and source documents are numbered after
+  injection, in time order, so an ID can't give a row away.
 - Reason codes on injected rows look normal.
 
 **Honest limit:** the same person writes both the anomalies and the detectors, so 100%
@@ -659,7 +756,7 @@ Database tests use their own `inventory_test` database and can't touch a real lo
 | Risk | What we do |
 |---|---|
 | Less time than the "72 hours" suggests | Sunday 10 PM freeze and the cut list |
-| The simulator is the hardest part to explain | No event queue, only a dict of what is due each day |
+| The simulator is the hardest part to explain | No event queue, only a dict of what is due each day and a sorted list of what is due at an exact time |
 | Injected rows damage later rows | Replay safety check; the validator must find only labelled issues |
 | Results look too perfect | Decoys and plain limits in the README |
 
@@ -677,6 +774,7 @@ Database tests use their own `inventory_test` database and can't touch a real lo
 | 10 | UI not specified | One simple React page, first to be cut |
 | 11 | The role says AI but the brief has no LLM part | No LLM. It would add randomness with no requirement behind it |
 | 12 | Public data is optional | Fully synthetic, with invented brand labels |
+| 13 | Are store purchases orders? | Walk-in sales cover the store channel in the ledger, with no order. The 50,000 orders are all online. STORE orders with no hold are not built, and the brief doesn't ask for them by name |
 
 Other assumptions: whole units only, one currency (INR), suppliers appear only as
 `source_doc` on RECEIPT rows, returns go back to the original location, walk-in sales

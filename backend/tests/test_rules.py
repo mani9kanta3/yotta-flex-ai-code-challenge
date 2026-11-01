@@ -82,6 +82,63 @@ def test_damaged_return_goes_to_the_blocked_bucket():
     assert rules.RETURN_BUCKETS == {"GOOD": "SELLABLE", "DAMAGED": "BLOCKED"}
 
 
+# ------------------------------------------------------------ late trucks
+
+FIRST = at(20)
+DAY = timedelta(days=1)
+SECOND = timedelta(seconds=1)
+
+
+def test_late_promise_counts_from_the_new_eta():
+    assert rules.late_promise(at(20), at(10)) == at(20) + DAY
+
+
+def test_late_promise_counts_from_now_when_the_truck_is_overdue():
+    assert rules.late_promise(at(10), at(15)) == at(15) + DAY
+
+
+@pytest.mark.parametrize("can_move, current, new, expected", [
+    # The first promise can still be kept.
+    (False, FIRST, FIRST, "KEEP"),
+    (True, FIRST, FIRST - SECOND, "KEEP"),
+    # Another location comes before everything else, even past the limit.
+    (True, FIRST, FIRST + DAY, "REALLOCATE"),
+    (True, FIRST, FIRST + 10 * DAY, "REALLOCATE"),
+    # A hold with a new promise keeps looking.
+    (True, FIRST + DAY, FIRST + DAY, "REALLOCATE"),
+    # Up to and including the limit, the promise is updated.
+    (False, FIRST, FIRST + DAY, "REPROMISE"),
+    (False, FIRST, FIRST + 3 * DAY, "REPROMISE"),
+    # One second past it, the hold is cancelled.
+    (False, FIRST, FIRST + 3 * DAY + SECOND, "CANCEL"),
+    # The limit counts from the first promise, not from the current one.
+    (False, FIRST + 3 * DAY, FIRST + 3 * DAY + SECOND, "CANCEL"),
+    # Nothing has changed since the last update, so there is nothing to do.
+    (False, FIRST + DAY, FIRST + DAY, "KEEP"),
+    (False, FIRST + 2 * DAY, FIRST + DAY, "KEEP"),
+])
+def test_what_happens_to_a_hold_on_a_late_truck(can_move, current, new, expected):
+    assert rules.late_truck_action(can_move, FIRST, current, new) == expected
+
+
+def late_candidate(location_id, from_on_hand, region="SOUTH", location_type="WAREHOUSE"):
+    return {"location_id": location_id, "from_on_hand": from_on_hand, "promisable": from_on_hand,
+            "region": region, "location_type": location_type}
+
+
+def test_reallocation_needs_one_location_to_cover_the_whole_hold():
+    assert rules.choose_reallocation(3, [late_candidate("LOC-1", 2), late_candidate("LOC-2", 2)], "SOUTH") is None
+
+
+def test_reallocation_takes_the_best_ranked_location_that_covers_it():
+    candidates = [late_candidate("LOC-1", 9, region="NORTH"), late_candidate("LOC-2", 3), late_candidate("LOC-3", 1)]
+    assert rules.choose_reallocation(3, candidates, "SOUTH")["location_id"] == "LOC-2"
+
+
+def test_reallocation_with_no_candidates_finds_nothing():
+    assert rules.choose_reallocation(1, [], "SOUTH") is None
+
+
 # ------------------------------------------------------------ walk-in sales
 
 def test_on_hand_includes_blocked():

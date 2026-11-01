@@ -1,0 +1,22 @@
+{
+  "results": {
+    "EXPIRY": {
+      "checked": 10,
+      "matched": 10
+    },
+    "TRUCK_ARRIVAL": {
+      "checked": 10,
+      "matched": 10
+    },
+    "CUSTOMER_CANCEL": {
+      "checked": 10,
+      "matched": 10
+    },
+    "LATE_TRUCK_CANCEL": {
+      "checked": 10,
+      "matched": 10
+    }
+  },
+  "differing": [],
+  "missing_kinds": []
+}

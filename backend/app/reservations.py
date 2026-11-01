@@ -7,7 +7,7 @@ time. These only release or keep stock, so they lock the order row, not the
 SKU-location rows.
 
 Consuming a hold when stock ships is in shipping.py. What happens to a held order
-when its truck is late is NOT BUILT YET, see docs/STATUS.md.
+when its truck is late is in late_trucks.py.
 """
 
 from . import rules

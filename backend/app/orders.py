@@ -128,21 +128,6 @@ def get_unit_price(cursor, sku_id):
     return row[0]
 
 
-def candidates_summary(ranked):
-    """The top three, kept as evidence of why this decision was made."""
-    summary = []
-    for candidate in ranked[:3]:
-        summary.append({
-            "location_id": candidate["location_id"],
-            "atp": candidate["atp"],
-            "promisable": candidate["promisable"],
-            "from_on_hand": candidate["from_on_hand"],
-            "safety_stock": candidate["safety_stock"],
-            "buffer_units": candidate["buffer_units"],
-        })
-    return summary
-
-
 def write_reservation(cursor, order_id, sequence_no, order_line_id, sku_id, part, channel, decided_at):
     reservation_id = f"RES-{order_id}-{sequence_no:02d}"
     expires_at = decided_at + timedelta(minutes=channel["hold_minutes"])
@@ -206,7 +191,7 @@ def write_decision(cursor, order_line_id, qty, result, decided_at):
                                             atp_seen, promisable_seen, candidates)
            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
         (decision_id, order_line_id, decided_at, qty, result["decision_code"], result["reason_code"],
-         chosen, atp_seen, promisable_seen, json.dumps(candidates_summary(result["ranked"]))),
+         chosen, atp_seen, promisable_seen, json.dumps(rules.candidates_summary(result["ranked"]))),
     )
 
 

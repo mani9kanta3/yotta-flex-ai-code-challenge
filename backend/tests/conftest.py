@@ -5,8 +5,9 @@ Tests that need PostgreSQL skip themselves if it isn't reachable, so a fresh
 clone still gets a clean run. They use their own databases, so they can't touch
 a real load.
 
-    loaded_database  generated data, loaded once. Used by read-only and
+    loaded_database  the clean baseline, loaded once. Used by read-only and
                      rolled-back tests.
+    final_database   the final data with its labelled problems, in its own database.
     orders_db        a few hand-written rows, rebuilt for every test. The numbers
                      are exact, and these tests really commit, because a lock only
                      matters between separate transactions.
@@ -17,6 +18,7 @@ import psycopg2
 
 from app import config, db
 from generator import master, settings
+from generator.export import clean_dir_of
 from scripts import load_data, setup_database
 from scripts.generate import generate
 
@@ -25,9 +27,16 @@ config.DB_NAME = "inventory_test"
 TEST_SEED = 20261022
 ORDERS_DB = "inventory_test_orders"
 
+FINAL_DB = "inventory_test_final"
 
-def tiny_scale():
-    return settings.get_scale("starter", skus=60, locations=6, movements=1_500)
+# The starter size, the smallest where every order outcome and labelled case happens.
+SMALL_MOVEMENTS = settings.SCALES["starter"]["movements"]
+SMALL_ORDERS = settings.SCALES["starter"]["orders"]
+SMALL_CASES_PER_TYPE = settings.SCALES["starter"]["anomalies_per_type"]
+
+
+def small_scale():
+    return settings.get_scale("starter")
 
 
 def require_postgres():
@@ -38,13 +47,45 @@ def require_postgres():
 
 
 @pytest.fixture(scope="session")
-def loaded_database(tmp_path_factory):
-    """Returns the folder the data was generated into."""
-    require_postgres()
-    data_dir = tmp_path_factory.mktemp("data")
-    generate(tiny_scale(), TEST_SEED, data_dir)
-    load_data.load(data_dir)
+def generated_data(tmp_path_factory):
+    """One generated dataset for the whole run. Returns the folder of the final data."""
+    data_dir = tmp_path_factory.mktemp("generated") / "tiny"
+    generate(small_scale(), TEST_SEED, data_dir)
     return data_dir
+
+
+@pytest.fixture(scope="session")
+def loaded_database(generated_data):
+    """The clean baseline, loaded once. Returns its folder."""
+    require_postgres()
+    clean_dir = clean_dir_of(generated_data)
+    load_data.load(clean_dir)
+    return clean_dir
+
+
+@pytest.fixture(scope="session")
+def final_database(generated_data):
+    """The final data with the labelled problems, in a database of its own. Returns its folder."""
+    require_postgres()
+    clean_db_name = config.DB_NAME
+    config.DB_NAME = FINAL_DB
+    try:
+        load_data.load(generated_data)
+    finally:
+        config.DB_NAME = clean_db_name
+    return generated_data
+
+
+@pytest.fixture
+def final_cursor(final_database):
+    """Like the cursor fixture, on the final data. Everything is rolled back."""
+    connection = db.get_connection(FINAL_DB)
+    try:
+        with connection.cursor() as test_cursor:
+            yield test_cursor
+    finally:
+        connection.rollback()
+        connection.close()
 
 
 @pytest.fixture

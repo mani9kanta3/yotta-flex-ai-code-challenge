@@ -1,0 +1,5 @@
+channel_code,is_online,counts_inbound,applies_safety_stock,hold_minutes
+WEB,true,true,true,30
+APP,true,true,true,30
+MARKETPLACE,true,false,true,120
+STORE,false,false,false,

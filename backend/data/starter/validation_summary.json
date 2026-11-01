@@ -1,0 +1,1191 @@
+{
+  "failed": 6,
+  "not_generated_yet": [
+    "store-channel orders"
+  ],
+  "checks": [
+    {
+      "check": "file matches its manifest checksum: product.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: sku.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: location.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: channel.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: channel_location.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: sku_location.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: replenishment_rule.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: inventory_balance.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: orders.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: order_line.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: shipment.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: reservation.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: order_allocation.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: inventory_movement.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: allocation_decision.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: order_event.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: reservation_event.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "file matches its manifest checksum: shipment_event.csv",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: product",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: sku",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: location",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: channel",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: channel_location",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: sku_location",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: replenishment_rule",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: inventory_balance",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: orders",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: order_line",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: shipment",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: reservation",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: order_allocation",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: inventory_movement",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: allocation_decision",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: order_event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: reservation_event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "table has rows: shipment_event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "ledger has movements of type RECEIPT",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "ledger has movements of type SALE",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "ledger has movements of type RETURN",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "ledger has movements of type TRANSFER_OUT",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "ledger has movements of type TRANSFER_IN",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "ledger has movements of type ADJUSTMENT",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "ledger has movements of type BLOCK",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "ledger has movements of type UNBLOCK",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "ledger has movements of type WRITE_OFF",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "some transfers are still in transit at the end",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "some transfers missed their ETA",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "generated data includes rejected oversell attempts",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "generated data includes expired holds",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "generated data includes split allocations",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "generated data includes orders held on inbound stock",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "generated data includes online returns",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "generated data includes holds moved off a late truck",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "generated data includes promises updated for a late truck",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "generated data includes holds cancelled past the late limit",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "generated data includes orders shipped",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "generated data includes parcels delivered",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: product",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: sku",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: location",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: channel",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: channel_location",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: sku_location",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: replenishment_rule",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: inventory_balance",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: orders",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: order_line",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: shipment",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: reservation",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: order_allocation",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: inventory_movement",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: allocation_decision",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: order_event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: reservation_event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches manifest: shipment_event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches target: skus",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches target: locations",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches target: movements",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "row count matches target: orders",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "movement_id format",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "sku_id format",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "location_id format",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "order_id format",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reservation_id format",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "shipment_id format",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "sku without a valid product",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "movement without a stocked pair",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "stocked pair without an opening balance",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "stocked pair without a closing balance",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "balance snapshot at the wrong time",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate source doc on single-row movements",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "sale with a zero or positive quantity",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "BLOCK or UNBLOCK group that is not a matching pair",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "BLOCK or UNBLOCK that changes total stock",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "stock below zero at any point in the ledger",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "movement before the pair went live",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "walk-in sale after a discontinued SKU stopped",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "stock allocated after a discontinued SKU stopped",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "movement outside the simulated period",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "movement ids not in time order",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reservation with no event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reservation event with an illegal transition",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reservation events that do not chain",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reservation status differs from its latest event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "order event with an illegal transition",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "order line event with an illegal transition",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "order status differs from its latest event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "order line status differs from its latest event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "order total differs from its lines",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "allocated line whose allocations do not add up to its quantity",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "line holding more than its quantity at any moment",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "open holds above the stock on the shelf at the end",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "hold confirmed at or after it expired",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "expired hold not dated at its expiry",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "first promise on the reservation differs from its first event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "new promise that is not later than the one before",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "order sale that differs from its allocation",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "finished order that still has an open hold",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "fulfilled order with a line that never shipped or ended",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "split decision without two holds",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "customer shipment without a sale",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "allocation and its reservation disagree",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "inbound holds above what the shipment carries",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "order sale before its inbound truck arrived",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "consumed hold without a sale of the same quantity",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "shipment with no event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "shipment event with an illegal transition",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "shipment events that do not chain",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "shipment status differs from its latest event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "transfer without exactly one matching TRANSFER_OUT",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "received transfer without exactly one matching TRANSFER_IN",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "transfer still in transit with a TRANSFER_IN already posted",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "transfer movement that does not belong to its shipment",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "TRANSFER_IN time differs from the RECEIVED event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "transfer units that left, arrived or stayed on the road do not add up",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "return not linked to a sale",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "return at a different SKU or location than its sale",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "return at or before its sale",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "returned more than was sold",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "hold that expires at or before it was created",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "hold whose first event differs from when it was created",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "decision before its order was placed",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "order sale before its allocation",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "transfer due before it was created",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: product",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: sku",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: location",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: channel",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: channel_location",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: sku_location",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: replenishment_rule",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: inventory_balance",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: orders",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: order_line",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: shipment",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: reservation",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: order_allocation",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: inventory_movement",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: allocation_decision",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: order_event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: reservation_event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: shipment_event",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "duplicate primary key: inventory_exception",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: sku.product_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: location.parent_location_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: channel_location.channel_code",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: channel_location.location_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: sku_location.sku_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: sku_location.location_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: replenishment_rule.sku_id, location_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: replenishment_rule.source_location_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: inventory_balance.sku_id, location_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: orders.channel_code",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: order_line.order_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: order_line.sku_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: shipment.order_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: shipment.from_location_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: shipment.to_location_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: shipment.transfer_sku_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: reservation.order_line_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: reservation.sku_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: reservation.sku_id, location_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: reservation.inbound_shipment_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: order_allocation.order_line_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: order_allocation.location_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: order_allocation.reservation_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: order_allocation.shipment_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: inventory_movement.sku_id, location_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: inventory_movement.allocation_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: inventory_movement.shipment_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: inventory_movement.related_movement_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: allocation_decision.order_line_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: allocation_decision.chosen_location_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: order_event.order_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: order_event.order_line_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: reservation_event.reservation_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: shipment_event.shipment_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: inventory_exception.balance_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: inventory_exception.reservation_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: inventory_exception.movement_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "reference points at nothing: inventory_exception.shipment_id",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: product.category",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: product.status",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: sku.status",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: location.location_type",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: location.region",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: channel.channel_code",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: channel_location.channel_code",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: inventory_balance.snapshot_type",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: orders.channel_code",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: orders.ship_to_region",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: orders.status",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: order_line.status",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: shipment.shipment_type",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: shipment.status",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: reservation.supply_type",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: reservation.status",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: inventory_movement.movement_type",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: inventory_movement.stock_bucket",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: allocation_decision.decision_code",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: order_event.to_status",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: reservation_event.to_status",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "value not allowed: shipment_event.to_status",
+      "violations": 0,
+      "passed": true
+    },
+    {
+      "check": "closing balance does not reconcile to opening plus ledger",
+      "violations": 5,
+      "passed": false,
+      "records": [
+        "BAL-0001522",
+        "BAL-0002482",
+        "BAL-0002513",
+        "BAL-0002872",
+        "BAL-0002961"
+      ]
+    },
+    {
+      "check": "network stock plus in transit differs from opening plus outside changes",
+      "violations": 5,
+      "passed": false,
+      "records": [
+        "SKU-000016",
+        "SKU-000040",
+        "SKU-000071",
+        "SKU-000130",
+        "SKU-000219"
+      ]
+    },
+    {
+      "check": "hold above what could be promised when it was placed",
+      "violations": 5,
+      "passed": false,
+      "records": [
+        "RES-ORD-2026-000043-01",
+        "RES-ORD-2026-000530-01",
+        "RES-ORD-2026-000717-01",
+        "RES-ORD-2026-000774-01",
+        "RES-ORD-2026-000890-01"
+      ]
+    },
+    {
+      "check": "order sale from the blocked bucket",
+      "violations": 5,
+      "passed": false,
+      "records": [
+        "MOV-2026-00000275",
+        "MOV-2026-00004035",
+        "MOV-2026-00004651",
+        "MOV-2026-00009909",
+        "MOV-2026-00013066"
+      ]
+    },
+    {
+      "check": "transfer received at or before it shipped",
+      "violations": 5,
+      "passed": false,
+      "records": [
+        "SHP-2026-000057",
+        "SHP-2026-000102",
+        "SHP-2026-000147",
+        "SHP-2026-000239",
+        "SHP-2026-000894"
+      ]
+    },
+    {
+      "check": "sample of 200 of 1463 order decisions gives the same answer from SQL",
+      "violations": 1,
+      "passed": false,
+      "records": [
+        "ORD-2026-000890-L01"
+      ]
+    }
+  ]
+}

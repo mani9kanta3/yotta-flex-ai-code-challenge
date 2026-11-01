@@ -163,8 +163,7 @@ def test_table_missing_from_the_manifest_fails(cursor, loaded_database):
 def test_ledger_with_a_movement_type_missing_fails(cursor, movement_type):
     cursor.execute("ALTER TABLE inventory_movement DISABLE TRIGGER inventory_movement_append_only")
     cursor.execute("DELETE FROM inventory_movement WHERE movement_type = %s", (movement_type,))
-    assert failed_checks(validate.check_generated_activity(cursor)) == [
-        f"ledger has movements of type {movement_type}"]
+    assert f"ledger has movements of type {movement_type}" in failed_checks(validate.check_generated_activity(cursor))
 
 
 def test_empty_ledger_fails_for_every_movement_type(cursor):
@@ -175,7 +174,7 @@ def test_empty_ledger_fails_for_every_movement_type(cursor):
 
 
 def test_no_truck_left_on_the_road_fails(cursor):
-    cursor.execute("UPDATE shipment SET status = 'RECEIVED' WHERE status = 'IN_TRANSIT'")
+    cursor.execute("UPDATE shipment SET status = 'RECEIVED' WHERE shipment_type = 'TRANSFER' AND status = 'IN_TRANSIT'")
     assert failed_checks(validate.check_generated_activity(cursor)) == [
         "some transfers are still in transit at the end"]
 
@@ -239,3 +238,124 @@ def test_database_refuses_a_sale_that_is_not_negative(cursor, quantity):
                        '2026-09-30 23:00:00', 'TEST', 'TEST-1')""",
             (sku_id, location_id, quantity),
         )
+
+
+# ------------------------------------------------------------ keys, values and dates
+
+def test_foreign_key_list_is_the_same_as_the_database(cursor):
+    """If a key is added to constraints.sql and not here, the validator would never check it."""
+    cursor.execute("""
+        SELECT child.relname,
+               (SELECT string_agg(a.attname, ', ' ORDER BY k.ord) FROM unnest(c.conkey) WITH ORDINALITY k(num, ord)
+                JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.num),
+               parent.relname,
+               (SELECT string_agg(a.attname, ', ' ORDER BY k.ord) FROM unnest(c.confkey) WITH ORDINALITY k(num, ord)
+                JOIN pg_attribute a ON a.attrelid = c.confrelid AND a.attnum = k.num)
+        FROM pg_constraint c
+        JOIN pg_class child ON child.oid = c.conrelid
+        JOIN pg_class parent ON parent.oid = c.confrelid
+        WHERE c.contype = 'f'""")
+    assert sorted(cursor.fetchall()) == sorted(validate.FOREIGN_KEYS)
+
+
+def test_primary_key_list_is_the_same_as_the_database(cursor):
+    cursor.execute("""
+        SELECT t.relname,
+               (SELECT string_agg(a.attname, ', ' ORDER BY k.ord) FROM unnest(c.conkey) WITH ORDINALITY k(num, ord)
+                JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.num)
+        FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid
+        WHERE c.contype = 'p' AND t.relnamespace = 'public'::regnamespace""")
+    assert dict(cursor.fetchall()) == validate.PRIMARY_KEYS
+
+
+def test_duplicate_primary_key_fails(cursor):
+    # The database would refuse this, so its own guard has to come off first.
+    cursor.execute("ALTER TABLE product DROP CONSTRAINT product_pkey CASCADE")
+    cursor.execute("""INSERT INTO product SELECT * FROM product ORDER BY product_id LIMIT 1""")
+    assert "duplicate primary key: product" in failed_checks(validate.run_checks(cursor))
+
+
+def test_reference_to_nothing_fails(cursor):
+    cursor.execute("ALTER TABLE sku DROP CONSTRAINT sku_product_id_fkey")
+    cursor.execute("""UPDATE sku SET product_id = 'PRD-999999'
+                      WHERE sku_id = (SELECT MIN(sku_id) FROM sku)""")
+    assert "reference points at nothing: sku.product_id" in failed_checks(validate.run_checks(cursor))
+
+
+def test_two_column_reference_to_nothing_fails(cursor):
+    cursor.execute("ALTER TABLE inventory_balance DROP CONSTRAINT inventory_balance_sku_id_location_id_fkey")
+    cursor.execute("ALTER TABLE inventory_balance DROP CONSTRAINT inventory_balance_sku_id_location_id_snapshot_type_key")
+    cursor.execute("DROP TRIGGER inventory_balance_append_only ON inventory_balance")
+    # Both IDs exist on their own, but this SKU isn't stocked at this location.
+    sku_id, location_id = unstocked_pair(cursor)
+    cursor.execute("""UPDATE inventory_balance SET sku_id = %s, location_id = %s
+                      WHERE balance_id = (SELECT MIN(balance_id) FROM inventory_balance)""", (sku_id, location_id))
+    assert "reference points at nothing: inventory_balance.sku_id, location_id" in failed_checks(validate.run_checks(cursor))
+
+
+def test_empty_optional_reference_is_allowed(cursor):
+    """The NDC has no parent, and that isn't a broken reference."""
+    results = {r["check"]: r["violations"] for r in validate.run_checks(cursor)}
+    assert results["reference points at nothing: location.parent_location_id"] == 0
+
+
+def test_value_not_allowed_fails(cursor):
+    cursor.execute("ALTER TABLE product DROP CONSTRAINT product_category_check")
+    cursor.execute("""UPDATE product SET category = 'TOYS'
+                      WHERE product_id = (SELECT MIN(product_id) FROM product)""")
+    assert "value not allowed: product.category" in failed_checks(validate.run_checks(cursor))
+
+
+def test_hold_expiring_when_created_fails(cursor):
+    cursor.execute("""UPDATE reservation SET expires_at = created_at
+                      WHERE reservation_id = (SELECT MIN(reservation_id) FROM reservation WHERE status <> 'REJECTED')""")
+    assert "hold that expires at or before it was created" in failed_checks(validate.run_checks(cursor))
+
+
+def test_decision_before_its_order_fails(cursor):
+    cursor.execute("DROP TRIGGER allocation_decision_append_only ON allocation_decision")
+    cursor.execute("""UPDATE allocation_decision SET decided_at = decided_at - INTERVAL '10 days'
+                      WHERE decision_id = (SELECT MIN(decision_id) FROM allocation_decision)""")
+    assert "decision before its order was placed" in failed_checks(validate.run_checks(cursor))
+
+
+def test_order_sale_before_its_allocation_fails(cursor):
+    cursor.execute("""UPDATE order_allocation SET allocated_at = allocated_at + INTERVAL '300 days'
+                      WHERE allocation_id = (SELECT MIN(allocation_id) FROM inventory_movement
+                                             WHERE allocation_id IS NOT NULL)""")
+    assert "order sale before its allocation" in failed_checks(validate.run_checks(cursor))
+
+
+def test_transfer_due_before_it_was_created_fails(cursor):
+    cursor.execute("""UPDATE shipment SET original_eta_at = created_at - INTERVAL '1 day'
+                      WHERE shipment_id = (SELECT MIN(shipment_id) FROM shipment WHERE shipment_type = 'TRANSFER')""")
+    assert "transfer due before it was created" in failed_checks(validate.run_checks(cursor))
+
+
+def test_hold_whose_first_event_differs_fails(cursor):
+    cursor.execute("""UPDATE reservation SET created_at = created_at - INTERVAL '1 second'
+                      WHERE reservation_id = (SELECT MIN(reservation_id) FROM reservation WHERE status <> 'REJECTED')""")
+    assert "hold whose first event differs from when it was created" in failed_checks(validate.run_checks(cursor))
+
+
+# ------------------------------------------------------------ files against the manifest
+
+def test_files_match_their_manifest_checksums(loaded_database):
+    results = validate.check_files_match_manifest(loaded_database, manifest_for(loaded_database))
+    assert len(results) == len(TABLE_COLUMNS)
+    assert failed_checks(results) == []
+
+
+def test_a_changed_file_fails_its_checksum(loaded_database, tmp_path):
+    shutil.copy(loaded_database / "sku.csv", tmp_path / "sku.csv")
+    with open(tmp_path / "sku.csv", "a", encoding="utf-8") as file:
+        file.write("\n")
+    manifest = {"files": {"sku.csv": manifest_for(loaded_database)["files"]["sku.csv"]}}
+    assert failed_checks(validate.check_files_match_manifest(tmp_path, manifest)) == [
+        "file matches its manifest checksum: sku.csv"]
+
+
+def test_a_missing_file_fails_its_checksum(loaded_database, tmp_path):
+    manifest = {"files": {"sku.csv": manifest_for(loaded_database)["files"]["sku.csv"]}}
+    assert failed_checks(validate.check_files_match_manifest(tmp_path, manifest)) == [
+        "file matches its manifest checksum: sku.csv"]

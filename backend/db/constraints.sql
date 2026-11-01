@@ -61,6 +61,7 @@ CREATE INDEX reservation_sku_location ON reservation (sku_id, location_id);
 CREATE INDEX reservation_event_lookup ON reservation_event (reservation_id, occurred_at);
 CREATE INDEX shipment_event_lookup ON shipment_event (shipment_id, occurred_at);
 CREATE INDEX order_event_lookup ON order_event (order_id, occurred_at);
+CREATE INDEX order_event_line_lookup ON order_event (order_line_id, occurred_at);
 CREATE INDEX order_line_order ON order_line (order_id);
 CREATE INDEX allocation_line ON order_allocation (order_line_id);
 CREATE INDEX movement_allocation ON inventory_movement (allocation_id);
@@ -75,8 +76,17 @@ SELECT setval('shipment_number',
               COALESCE((SELECT MAX(RIGHT(shipment_id, 6)::BIGINT) FROM shipment), 0) + 1, FALSE);
 SELECT setval('movement_number',
               COALESCE((SELECT MAX(RIGHT(movement_id, 8)::BIGINT) FROM inventory_movement), 0) + 1, FALSE);
+SELECT setval('order_number',
+              COALESCE((SELECT MAX(RIGHT(order_id, 6)::BIGINT) FROM orders), 0) + 1, FALSE);
+SELECT setval('allocation_number',
+              COALESCE((SELECT MAX(RIGHT(allocation_id, 7)::BIGINT) FROM order_allocation), 0) + 1, FALSE);
+SELECT setval('decision_number',
+              COALESCE((SELECT MAX(RIGHT(decision_id, 7)::BIGINT) FROM allocation_decision), 0) + 1, FALSE);
+-- One sequence numbers all three event tables, so it has to pass the highest of them.
 SELECT setval('event_number',
-              COALESCE((SELECT MAX(event_id) FROM shipment_event), 0) + 1, FALSE);
+              GREATEST((SELECT COALESCE(MAX(event_id), 0) FROM shipment_event),
+                       (SELECT COALESCE(MAX(event_id), 0) FROM order_event),
+                       (SELECT COALESCE(MAX(event_id), 0) FROM reservation_event)) + 1, FALSE);
 
 -- A bulk load leaves the planner with no row statistics until this runs. At full
 -- scale it took the ATP query for the most stocked SKU from 881 ms to 295 ms.

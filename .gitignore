@@ -7,8 +7,13 @@ __pycache__/
 # Secrets stay local. .env.example is the one that gets committed.
 .env
 
-# Too large for Git. The generator recreates it with one command.
+# Too large for Git. The generator recreates them with one command.
 backend/data/full/
+backend/data/full_clean/
+backend/data/ground_truth/full/
+
+# Only there to show the clean baseline passes. The generator recreates it too.
+backend/data/starter_clean/
 
 # Scratch output from reproducibility runs.
 backend/data/compare/

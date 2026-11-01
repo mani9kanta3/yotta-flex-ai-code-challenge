@@ -7,8 +7,10 @@ been received, so a SALE can never post before its TRANSFER_IN. All the holds of
 order ship together, in one box per location, so an order with one line on a truck
 waits for that truck.
 
-NOT BUILT YET, see docs/STATUS.md: delivery confirmation, what happens to a waiting
-order when its truck is late, and short picks beyond refusing the shipment.
+A waiting order whose truck runs late is handled in late_trucks.py.
+
+NOT BUILT YET, see docs/STATUS.md: anything for a short pick beyond refusing the
+shipment.
 """
 
 from . import atp, orders, rules
@@ -116,6 +118,23 @@ def ship_order_in_transaction(cursor, order_id, t, lock_timeout_ms=orders.DEFAUL
 
 def ship_order(connection, order_id, t, lock_timeout_ms=orders.DEFAULT_LOCK_TIMEOUT_MS):
     return orders.run_in_transaction(connection, ship_order_in_transaction, order_id, t, lock_timeout_ms)
+
+
+def deliver_shipment(connection, shipment_id, t):
+    """The parcel reached the customer. No stock moves, because it left when it shipped."""
+    with connection, connection.cursor() as cursor:
+        cursor.execute(
+            """SELECT status, created_at FROM shipment
+               WHERE shipment_id = %s AND shipment_type = 'CUSTOMER' FOR UPDATE""",
+            (shipment_id,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            raise OrderStateError(f"no customer shipment {shipment_id}")
+        if row[0] != "IN_TRANSIT" or t <= row[1]:
+            raise OrderStateError(f"can't deliver {shipment_id} at {t}, it is {row[0]}, shipped {row[1]}")
+        add_shipment_event(cursor, shipment_id, "IN_TRANSIT", "DELIVERED", t, "DELIVERED")
+        cursor.execute("UPDATE shipment SET status = 'DELIVERED' WHERE shipment_id = %s", (shipment_id,))
 
 
 def ship_waiting_orders(connection, shipment_id, t):

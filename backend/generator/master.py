@@ -7,7 +7,7 @@ and reorder points are calculated from the forecast, never picked at random.
 """
 
 import math
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from app import config
 from generator import settings
@@ -273,6 +273,21 @@ def make_pair(sku, location, forecast):
     }
 
 
+def day_start(day):
+    return datetime(day.year, day.month, day.day)
+
+
+def is_sku_live(pair, day):
+    sku = pair["sku"]
+    if day < sku["effective_from"]:
+        return False
+    return sku["effective_to"] is None or day < sku["effective_to"]
+
+
+def is_pair_live(pair, day):
+    return day >= pair["ranged_from"] and is_sku_live(pair, day)
+
+
 def build_rules(pairs):
     """Every number here is calculated from the forecast. See docs/PLAN.md."""
     rules = []
@@ -319,7 +334,7 @@ def build_opening_stock(rng, pairs):
         cover = math.ceil(forecast * rng.uniform(7, 21))
         on_hand = pair["rule"]["reorder_point"] + cover + rng.randint(0, 3)
         blocked = 0
-        if on_hand >= 5 and rng.random() < settings.OPENING_BLOCKED_SHARE:
+        if on_hand >= 4 and rng.random() < settings.OPENING_BLOCKED_SHARE:
             blocked = rng.randint(1, 3)
         pair["opening_on_hand"] = on_hand
         pair["opening_blocked"] = blocked

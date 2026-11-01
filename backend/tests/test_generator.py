@@ -9,11 +9,11 @@ import pytest
 from app import config
 from generator import export, master, settings, simulate
 from scripts.generate import generate
-from tests.conftest import TEST_SEED, tiny_scale
+from tests.conftest import TEST_SEED, small_scale
 
 
 def build_ledger(target_rows=None):
-    scale = tiny_scale()
+    scale = small_scale()
     rng = random.Random(TEST_SEED)
     _products, skus = master.build_products_and_skus(rng, scale)
     locations = master.build_locations(rng, scale)
@@ -25,7 +25,7 @@ def build_ledger(target_rows=None):
 
 def small_ledger(target_rows, opening_stock):
     """One live store pair and one live warehouse pair, with stock we choose."""
-    scale = tiny_scale()
+    scale = small_scale()
     rng = random.Random(TEST_SEED)
     _products, skus = master.build_products_and_skus(rng, scale)
     locations = master.build_locations(rng, scale)
@@ -150,7 +150,7 @@ def test_unblock_puts_stock_back_without_changing_the_total():
 
 def three_level_ledger(target_rows=50, ndc_stock=100, warehouse_stock=100, store_stock=0):
     """One SKU at a store, its warehouse and the NDC, with stock we choose."""
-    scale = tiny_scale()
+    scale = small_scale()
     rng = random.Random(TEST_SEED)
     _products, skus = master.build_products_and_skus(rng, scale)
     locations = master.build_locations(rng, scale)
@@ -289,6 +289,11 @@ def test_late_truck_records_a_new_eta_and_keeps_the_first():
 
     ledger.miss_eta(index, new_eta)
 
+    # Nobody knows yet. The notice comes in an hour after the first ETA passes.
+    assert ledger.shipments[index]["eta_at"] == DUE
+    ledger.tick(DUE + timedelta(hours=1))
+
+    assert ledger.shipments[index]["eta_at"] == new_eta
     assert ledger.shipments[index]["original_eta_at"] == DUE
     event = ledger.shipment_events[-1]
     assert (event[2], event[3], event[4], event[5]) == ("IN_TRANSIT", "IN_TRANSIT", "ETA_MISSED", new_eta)
@@ -532,12 +537,12 @@ def test_ids_follow_the_brief(tmp_path):
 
 
 def test_same_seed_gives_identical_files(tmp_path):
-    first = generate(tiny_scale(), TEST_SEED, tmp_path / "a")
-    second = generate(tiny_scale(), TEST_SEED, tmp_path / "b")
+    first = generate(small_scale(), TEST_SEED, tmp_path / "a")
+    second = generate(small_scale(), TEST_SEED, tmp_path / "b")
     assert first["files"] == second["files"]
 
 
 def test_different_seed_gives_different_data(tmp_path):
-    first = generate(tiny_scale(), TEST_SEED, tmp_path / "a")
-    second = generate(tiny_scale(), TEST_SEED + 1, tmp_path / "b")
+    first = generate(small_scale(), TEST_SEED, tmp_path / "a")
+    second = generate(small_scale(), TEST_SEED + 1, tmp_path / "b")
     assert first["files"]["inventory_movement.csv"]["sha256"] != second["files"]["inventory_movement.csv"]["sha256"]

@@ -1,0 +1,104 @@
+{
+  "passed": 223,
+  "expected_failures": [
+    {
+      "check": "closing balance does not reconcile to opening plus ledger",
+      "violations": 5,
+      "passed": false,
+      "records": [
+        "BAL-0001522",
+        "BAL-0002482",
+        "BAL-0002513",
+        "BAL-0002872",
+        "BAL-0002961"
+      ],
+      "labelled": 5,
+      "missed": [],
+      "unrelated": [],
+      "problems": [],
+      "issue": "BALANCE_NOT_RECONCILED"
+    },
+    {
+      "check": "network stock plus in transit differs from opening plus outside changes",
+      "violations": 5,
+      "passed": false,
+      "records": [
+        "SKU-000016",
+        "SKU-000040",
+        "SKU-000071",
+        "SKU-000130",
+        "SKU-000219"
+      ],
+      "labelled": 5,
+      "missed": [],
+      "unrelated": [],
+      "problems": [],
+      "issue": "BALANCE_NOT_RECONCILED"
+    },
+    {
+      "check": "hold above what could be promised when it was placed",
+      "violations": 5,
+      "passed": false,
+      "records": [
+        "RES-ORD-2026-000043-01",
+        "RES-ORD-2026-000530-01",
+        "RES-ORD-2026-000717-01",
+        "RES-ORD-2026-000774-01",
+        "RES-ORD-2026-000890-01"
+      ],
+      "labelled": 5,
+      "missed": [],
+      "unrelated": [],
+      "problems": [],
+      "issue": "RESERVATION_EXCEEDS_AVAILABLE"
+    },
+    {
+      "check": "order sale from the blocked bucket",
+      "violations": 5,
+      "passed": false,
+      "records": [
+        "MOV-2026-00000275",
+        "MOV-2026-00004035",
+        "MOV-2026-00004651",
+        "MOV-2026-00009909",
+        "MOV-2026-00013066"
+      ],
+      "labelled": 5,
+      "missed": [],
+      "unrelated": [],
+      "problems": [],
+      "issue": "FULFILLED_FROM_BLOCKED"
+    },
+    {
+      "check": "transfer received at or before it shipped",
+      "violations": 5,
+      "passed": false,
+      "records": [
+        "SHP-2026-000057",
+        "SHP-2026-000102",
+        "SHP-2026-000147",
+        "SHP-2026-000239",
+        "SHP-2026-000894"
+      ],
+      "labelled": 5,
+      "missed": [],
+      "unrelated": [],
+      "problems": [],
+      "issue": "TRANSFER_DOUBLE_COUNTED"
+    },
+    {
+      "check": "sample of 200 of 1463 order decisions gives the same answer from SQL",
+      "violations": 1,
+      "passed": false,
+      "records": [
+        "ORD-2026-000890-L01"
+      ],
+      "labelled": 1,
+      "missed": [],
+      "unrelated": [],
+      "problems": [],
+      "issue": "RESERVATION_EXCEEDS_AVAILABLE"
+    }
+  ],
+  "unexpected_failures": []
+}

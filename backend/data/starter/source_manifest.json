@@ -1,0 +1,135 @@
+{
+  "generator_command": "python -m scripts.generate --scale starter --seed 20261022",
+  "seed": 20261022,
+  "dataset": "final",
+  "scale": {
+    "skus": 300,
+    "locations": 12,
+    "movements": 20000,
+    "orders": 1000,
+    "store_assortment_share": 0.25,
+    "anomalies_per_type": 5,
+    "decoys_per_type": 5,
+    "checkpoints_per_kind": 5,
+    "name": "starter"
+  },
+  "period": {
+    "start": "2026-01-01 00:00:00",
+    "as_of": "2026-09-30 23:59:59"
+  },
+  "python_version": "3.12.3",
+  "data_source": {
+    "type": "synthetic",
+    "external_data_used": false,
+    "note": "All rows come from this generator. Brands are invented labels, city names are ordinary place names, and there is no personal data."
+  },
+  "generation_counters": {
+    "walk_in_refused": 729,
+    "reorders_skipped_no_budget": 1,
+    "transfers_short_of_stock": 138,
+    "transfers_late": 256,
+    "returns_good": 588,
+    "returns_damaged": 121,
+    "returns_refused": 0,
+    "decisions_single": 1153,
+    "decisions_split": 61,
+    "decisions_inbound": 38,
+    "decisions_rejected": 211,
+    "decisions_reallocated": 2,
+    "orders_expired": 154,
+    "orders_unshipped_no_budget": 0,
+    "late_reallocated": 2,
+    "late_repromised": 11,
+    "late_cancelled": 6,
+    "top_up_sales": 75,
+    "top_up_receipts": 0,
+    "transfers_in_transit_at_end": 67,
+    "units_in_transit_at_end": 827,
+    "oversell_attempts": 25
+  },
+  "not_generated_yet": [
+    "store-channel orders"
+  ],
+  "files": {
+    "product.csv": {
+      "rows": 91,
+      "sha256": "f7761eb1b7d85c81deba4b2228649b10b9a5811dfaaeebe0574d35fb7ff15e4b"
+    },
+    "sku.csv": {
+      "rows": 300,
+      "sha256": "33b4337ef9953d91edcc9c114a142cd9d76a9bbf1c07020011211ce3aabc88b7"
+    },
+    "location.csv": {
+      "rows": 12,
+      "sha256": "6163375f19908bcf5640a4e03902fe2935d18a74c5b39586e4ed0bbfbe4f7940"
+    },
+    "channel.csv": {
+      "rows": 4,
+      "sha256": "25015ee94da7eb65946043cb0be8b9d9ea46df0fc89e87fd2636aeb5809d6e5e"
+    },
+    "channel_location.csv": {
+      "rows": 27,
+      "sha256": "46cd4f0ea42cec6a0e326003677db183a99ea37b8a9845ac789630faec41ce17"
+    },
+    "sku_location.csv": {
+      "rows": 1521,
+      "sha256": "9c6268e91ad9632447508ca6478eb6337793fae02625420040b3bc71bae9f68d"
+    },
+    "replenishment_rule.csv": {
+      "rows": 1521,
+      "sha256": "6997ce767857b9a606b974db6edc6a4e2f423ce2a81ca47ba21a14010e8d8f98"
+    },
+    "inventory_balance.csv": {
+      "rows": 3042,
+      "sha256": "25f717aeabec710282ea53b0b8abd58da870e33811ed35af07a26c93c78038d3"
+    },
+    "orders.csv": {
+      "rows": 1000,
+      "sha256": "67aa68dbb1564ad47959d2c4e60ad80c0d78a6326007d407cb670fd3009baf81"
+    },
+    "order_line.csv": {
+      "rows": 1463,
+      "sha256": "13db88d16123e521cdeee21e766f226de0d3f5ed80f74bd447eb848a8a4d1e03"
+    },
+    "shipment.csv": {
+      "rows": 3813,
+      "sha256": "cbdcd7d586c45f9a170b09f1bdf6e621f075e56662df7e32bba51d8cd4a697d4"
+    },
+    "reservation.csv": {
+      "rows": 1526,
+      "sha256": "a3b15405a7fce6a31e99581714638ba9da959e5ec5e182549469c4e22fb12884"
+    },
+    "order_allocation.csv": {
+      "rows": 1315,
+      "sha256": "39b2ca24c114fb1c38ac512fa631ad03b7f9ff8f2333a7991367b41f8216f252"
+    },
+    "inventory_movement.csv": {
+      "rows": 20000,
+      "sha256": "d0d73e1fafd2848982950ad5e1eaf18e52d57d1ecc837ef60eb8ea9f06898117"
+    },
+    "allocation_decision.csv": {
+      "rows": 1465,
+      "sha256": "fbb7642bdf1fd41ded848f78e3e2bca3334eb729de4520d8eed362e5a23883d6"
+    },
+    "order_event.csv": {
+      "rows": 7660,
+      "sha256": "feea90f310b779e937c2530196c3cd02cd03af3d7814754e97b4502ecca0ebbd"
+    },
+    "reservation_event.csv": {
+      "rows": 3807,
+      "sha256": "9f2e0aa7d1bb6171b83da9352d77f8cac40115c9ca812a86649e6f0a8e5e1c94"
+    },
+    "shipment_event.csv": {
+      "rows": 11608,
+      "sha256": "6f82b49f8edb1d5da4a7ba1b91cf3e43d3ff5ced88ac9ed88c06794e0c0974c3"
+    }
+  },
+  "ground_truth_file": {
+    "rows": 65,
+    "sha256": "60bca66d97a5d2f88236fa0163b5c719ef2a9b2648de5da31f582290012bc1de"
+  },
+  "atp_checkpoints_file": {
+    "rows": 40,
+    "sha256": "255573668678d5120463aa72b21a0a73c679dd5483aa28be3a49c0836938c597"
+  }
+}

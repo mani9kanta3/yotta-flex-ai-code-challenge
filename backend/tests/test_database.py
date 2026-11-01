@@ -10,7 +10,9 @@ from datetime import timedelta
 import psycopg2
 import pytest
 
+from generator import settings
 from scripts import validate
+from tests.conftest import small_scale
 
 pytestmark = pytest.mark.database
 
@@ -110,7 +112,12 @@ def test_generated_data_passes_every_check(cursor):
 
 def test_movement_count_matches_the_target(cursor):
     cursor.execute("SELECT COUNT(*) FROM inventory_movement")
-    assert cursor.fetchone()[0] == 1_500
+    assert cursor.fetchone()[0] == settings.clean_scale(small_scale())["movements"]
+
+
+def test_order_count_matches_the_target(cursor):
+    cursor.execute("SELECT COUNT(*) FROM orders")
+    assert cursor.fetchone()[0] == settings.clean_scale(small_scale())["orders"]
 
 
 def test_validator_catches_a_sale_without_stock(cursor):
@@ -180,13 +187,15 @@ def test_order_flow_works_on_generated_data(cursor):
 
 def received_transfer(cursor):
     cursor.execute("""SELECT shipment_id, transfer_sku_id, from_location_id, to_location_id, transfer_qty
-                      FROM shipment WHERE status = 'RECEIVED' ORDER BY shipment_id LIMIT 1""")
+                      FROM shipment WHERE shipment_type = 'TRANSFER' AND status = 'RECEIVED'
+                      ORDER BY shipment_id LIMIT 1""")
     return cursor.fetchone()
 
 
 def in_transit_transfer(cursor):
     cursor.execute("""SELECT shipment_id, transfer_sku_id, from_location_id, to_location_id, transfer_qty
-                      FROM shipment WHERE status = 'IN_TRANSIT' ORDER BY shipment_id LIMIT 1""")
+                      FROM shipment WHERE shipment_type = 'TRANSFER' AND status = 'IN_TRANSIT'
+                      ORDER BY shipment_id LIMIT 1""")
     return cursor.fetchone()
 
 
@@ -204,7 +213,8 @@ def add_transfer_row(cursor, movement_id, shipment_id, sku_id, location_id, move
 def test_generated_network_stock_plus_in_transit_is_conserved_in_sql(cursor):
     """Two calculations: this one from the query the live system uses, for every SKU."""
     from app import atp, config
-    cursor.execute("SELECT DISTINCT transfer_sku_id FROM shipment ORDER BY 1 LIMIT 20")
+    cursor.execute("""SELECT DISTINCT transfer_sku_id FROM shipment
+                      WHERE shipment_type = 'TRANSFER' ORDER BY 1 LIMIT 20""")
     for (sku_id,) in cursor.fetchall():
         cursor.execute("""SELECT COALESCE(SUM(quantity), 0) FROM inventory_movement
                           WHERE sku_id = %s AND movement_type NOT IN ('TRANSFER_OUT', 'TRANSFER_IN')""", (sku_id,))

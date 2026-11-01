@@ -1,0 +1,2 @@
+# The manifest holds a checksum of each data file, so Git must not change a single byte.
+backend/data/** -text

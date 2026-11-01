@@ -13,6 +13,9 @@ INBOUND_HORIZON_HOURS = 24
 # We promise to ship within this long of having the stock.
 PROMISE_HOURS = 24
 
+# A customer waits at most this long past their first promise for a late truck.
+LATE_LIMIT_DAYS = 3
+
 # Warehouses ship online orders first, then the NDC, and stores last so that
 # their shelves are kept for walk-in customers.
 LOCATION_TYPE_ORDER = {"WAREHOUSE": 0, "NDC": 1, "STORE": 2}
@@ -228,6 +231,21 @@ def decision(decision_code, reason_code, parts, ranked):
     return {"decision_code": decision_code, "reason_code": reason_code, "parts": parts, "ranked": ranked}
 
 
+def candidates_summary(ranked):
+    """The top three, kept as evidence of why this decision was made."""
+    summary = []
+    for candidate in ranked[:3]:
+        summary.append({
+            "location_id": candidate["location_id"],
+            "atp": candidate["atp"],
+            "promisable": candidate["promisable"],
+            "from_on_hand": candidate["from_on_hand"],
+            "safety_stock": candidate["safety_stock"],
+            "buffer_units": candidate["buffer_units"],
+        })
+    return summary
+
+
 def promised_ship_by(decided_at, eta_at):
     """From when we have the stock: now if on hand, or when the truck is due."""
     return (eta_at or decided_at) + timedelta(hours=PROMISE_HOURS)
@@ -265,6 +283,45 @@ def can_receive(status, last_event_at, t):
 def can_ship_hold(supply_type, shipment_state):
     """Stock on a truck can't go to a customer until the truck has been received."""
     return supply_type == "ON_HAND" or shipment_state == "RECEIVED"
+
+
+# ------------------------------------------------------------ late trucks
+
+def late_promise(eta_at, t):
+    """A truck that is overdue with no new ETA can't arrive any earlier than now."""
+    return max(eta_at, t) + timedelta(hours=PROMISE_HOURS)
+
+
+def choose_reallocation(qty, candidates, region):
+    """The best-ranked location that can cover the whole hold from on-hand stock, or None."""
+    for candidate in rank_candidates(candidates, region):
+        if candidate["from_on_hand"] >= qty:
+            return candidate
+    return None
+
+
+def late_truck_action(can_move, first_promise, current_promise, new_promise):
+    """
+    What to do with a paid hold on a late truck, in this order:
+
+        1. the first promise can still be kept: leave it alone
+        2. another location has the stock: move the hold there
+        3. past the limit after the first promise: cancel, which releases the hold
+        4. the promise has slipped again: update it
+        5. otherwise: leave it, and look again next time
+
+    The limit counts from the first promise, so repeated small delays can't stretch it.
+    A hold keeps looking for another location for as long as it waits.
+    """
+    if new_promise <= first_promise:
+        return "KEEP"
+    if can_move:
+        return "REALLOCATE"
+    if new_promise > first_promise + timedelta(days=LATE_LIMIT_DAYS):
+        return "CANCEL"
+    if new_promise > current_promise:
+        return "REPROMISE"
+    return "KEEP"
 
 
 # ------------------------------------------------------------ returns

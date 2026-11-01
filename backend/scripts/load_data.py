@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 from app import config, db
-from generator.export import TABLE_COLUMNS
+from generator.export import TABLE_COLUMNS, clean_dir_of
 from generator.settings import SCALES
 from scripts import setup_database
 
@@ -44,9 +44,11 @@ def main():
     parser = argparse.ArgumentParser(description="Load a generated dataset.")
     parser.add_argument("--scale", choices=list(SCALES), default="starter")
     parser.add_argument("--data", help="folder holding the CSV files, default data/<scale>")
+    parser.add_argument("--clean", action="store_true", help="load the clean baseline, data/<scale>_clean")
     args = parser.parse_args()
 
-    load(Path(args.data) if args.data else config.DATA_DIR / args.scale)
+    data_dir = Path(args.data) if args.data else config.DATA_DIR / args.scale
+    load(clean_dir_of(data_dir) if args.clean else data_dir)
 
 
 if __name__ == "__main__":
