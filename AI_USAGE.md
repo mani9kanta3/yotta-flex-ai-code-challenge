@@ -9,12 +9,17 @@ that I wrote the implementation myself or independently verified every result.
 **Tools:** Claude Code, in the Claude desktop app, for implementation, as recorded in this
 repository; and OpenAI Codex for a separate review conversation, fix prompts and this disclosure
 edit. Every message to Claude Code is in [prompt-history/](prompt-history/), including the short
-ones. The [Codex prompt archive](prompt-history/codex/README.md) contains all 21 user messages in the saved review conversation through “you do the prompt history” on 2 November 2026, including all nine pasted text attachments. Several instructions sent to the implementation assistant were drafted by Codex.
+ones. The [Codex prompt archive](prompt-history/codex/README.md) contains all 26 user messages in the saved review conversation through the Render hosting selection on 2 November 2026, including all nine pasted text attachments. Several instructions sent to the implementation assistant were drafted by Codex.
 
 **What the AI wrote:** the first draft of the plan, and all of the code, SQL, tests and
 documentation in this repository. That includes the generator, the API, the React page and
 the README. Codex subsequently reviewed files, ran checks, reproduced problems and edited
 this disclosure. I am not presenting AI-generated code or review suggestions as my own unaided work.
+
+After the challenge review, I also asked Codex to prepare a normal public deployment on Render.
+Codex added the Docker build, Render configuration, web entry point and first-start database
+initialization, and tested them with a disposable local database. This deployment code is also
+AI-written. Local container checks do not mean the site has already been published on Render.
 
 **What the prompts decided:**
 

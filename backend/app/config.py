@@ -19,6 +19,7 @@ DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "inventory_dev")
 DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT = int(os.getenv("DB_PORT", "5434"))
+DB_MANAGED = os.getenv("DB_MANAGED", "false").lower() == "true"
 
 DB_DIR = BACKEND_DIR / "db"
 DATA_DIR = BACKEND_DIR / "data"

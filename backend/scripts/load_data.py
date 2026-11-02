@@ -37,7 +37,7 @@ def check_files(data_dir):
             raise LoadRefused(f"{file_name} in {data_dir} differs from its manifest")
 
 
-def load(data_dir):
+def load(data_dir, initialize_exceptions=False):
     check_files(data_dir)
     setup_database.ensure_database()
 
@@ -59,6 +59,10 @@ def load(data_dir):
             started = time.perf_counter()
             cursor.execute(setup_database.read_sql_file("constraints.sql"))
             print(f"  foreign keys and indexes took {time.perf_counter() - started:.1f}s")
+            if initialize_exceptions:
+                # First deployment: the seed and its detected exceptions commit together.
+                from app import detect
+                detect.write_exceptions(cursor, detect.find_exceptions(cursor))
         connection.commit()
     finally:
         # Closing without a commit rolls everything back.

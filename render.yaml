@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: yotta-flex-inventory
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      - key: DB_MANAGED
+        value: "true"
+      - key: DB_HOST
+        fromDatabase:
+          name: yotta-flex-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: yotta-flex-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: yotta-flex-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: yotta-flex-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: yotta-flex-db
+          property: password
+
+databases:
+  - name: yotta-flex-db
+    plan: free
+    region: singapore
+    postgresMajorVersion: "17"
+    databaseName: inventory
+    user: inventory
+    ipAllowList: []

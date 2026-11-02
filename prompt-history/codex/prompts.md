@@ -509,3 +509,39 @@ Now check everything is good and working right ?
 ````text
 you do the prompt history
 ````
+
+## 22 — 2026-11-02T04:08:58.545Z
+
+````text
+check it
+````
+
+## 23 — 2026-11-02T04:18:45.433Z
+
+````text
+[https://github.com/mani9kanta3/yotta-flex-ai-code-challenge](https://github.com/mani9kanta3/yotta-flex-ai-code-challenge)
+
+I have pushed it my self check it again
+````
+
+## 24 — 2026-11-02T04:46:07.567Z
+
+````text
+can we deploy
+````
+
+## 25 — 2026-11-02T05:01:26.145Z
+
+````text
+no need of read only and password-protected demo
+
+normal deploy
+````
+
+## 26 — 2026-11-02T05:02:06.735Z
+
+````text
+<send_user_message_question_reply>
+[{"questionItemId":"[\"request_user_input_async\",\"call_344a984893084968a32dceda93a33e96\",0]","question":"Which hosting account should we use? This app needs a Python service and PostgreSQL.","answer":"Render"}]
+</send_user_message_question_reply>
+````

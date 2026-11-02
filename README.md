@@ -27,6 +27,9 @@ This project is that system, on generated data:
 
 ## Quick start
 
+For a public Render demo with order actions enabled, see [Deploy on Render](docs/DEPLOY_RENDER.md).
+The deployment uses starter data and preserves visitor-created orders across restarts.
+
 You need Python 3.12, Node 20.19 or later on Node 20 (22.12 or later on Node 22, built with Node 24), and Docker. These are PowerShell commands, from the repo root.
 
 **1. Start the database.** It runs on port 5434, so it can sit beside another PostgreSQL, and only this

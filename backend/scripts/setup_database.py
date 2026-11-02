@@ -17,6 +17,10 @@ def ensure_database(dbname=None):
     which is why autocommit is on.
     """
     dbname = dbname or config.DB_NAME
+    if config.DB_MANAGED:
+        # The hosting provider creates this database; its user need not be an administrator.
+        db.get_connection(dbname).close()
+        return
     connection = db.get_connection("postgres")
     connection.autocommit = True
     try:
