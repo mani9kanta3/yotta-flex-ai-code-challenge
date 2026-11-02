@@ -36,6 +36,7 @@ AI-written. Local container checks do not mean the site has already been publish
 | [9](prompt-history/09-finish-the-project.md) | Finishing the remaining steps in one go |
 | [10](prompt-history/10-fix-review-findings.md) | Fixing the findings in `docs/FINAL_REVIEW.md`, each with a test written first |
 | [12](prompt-history/12-balance-dates.md) | Comparing every balance's date after a changed date passed the check. File 11 holds the short messages |
+| [13](prompt-history/13-improve-the-ui.md) | Improving how the site looks and works on a phone, with the same data, actions and rules |
 
 **How results were checked:** the AI ran the commands and quoted their output, which is what the
 numbers in the README and `docs/STATUS.md` come from. It also broke the code on purpose in a

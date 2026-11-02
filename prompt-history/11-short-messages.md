@@ -17,4 +17,4 @@ between, word for word, recovered from the session's transcript. Times are IST.
 | 2 Nov, 01:26 | Now check everything is good and working right ? |
 | 2 Nov, during that check | you have repo link right or should I provide you ? |
 
-That transcript has 22 messages in all. The other 11 are in files 01 to 10 and 12 of this folder.
+That transcript has 23 messages in all. The other 12 are in files 01 to 10, 12 and 13 of this folder.

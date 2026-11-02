@@ -1,6 +1,6 @@
 import { useState } from "react";
 import api, { errorText } from "../api.js";
-import { Badge, Empty, ErrorNote, Loading, PageHeader, Panel, Tile, Verdict, useLoad } from "../components/ui.jsx";
+import { Badge, Empty, ErrorNote, Loading, PageHeader, Panel, Stat, Stats, Verdict, useLoad } from "../components/ui.jsx";
 import { dateTime, money, number, words } from "../format.js";
 
 // Puts the order, hold and truck events into one story, oldest first. The kinds stay labelled.
@@ -28,6 +28,35 @@ function timelineOf(trace) {
     })),
   ];
   return rows.sort((a, b) => a.at.localeCompare(b.at));
+}
+
+// How far the order has got, read from its own events and parcels, not guessed from its status.
+function stepsOf(trace) {
+  const reached = new Set(trace.order_events.filter((event) => !event.order_line_id).map((event) => event.to_status));
+  const parcels = trace.shipments.filter((row) => row.shipment_type === "CUSTOMER");
+  const steps = [
+    { label: "Placed", done: reached.has("PLACED") },
+    { label: "Allocated", done: reached.has("ALLOCATED") },
+    { label: "Paid", done: reached.has("CONFIRMED") },
+    { label: "Shipped", done: reached.has("FULFILLED") },
+    { label: "Delivered", done: parcels.length > 0 && parcels.every((row) => row.status === "DELIVERED") },
+  ];
+  const status = trace.order.status;
+  if (status !== "CANCELLED" && status !== "REJECTED") return steps;
+  return [...steps.filter((step) => step.done), { label: words(status), done: true, ended: true }];
+}
+
+function OrderSteps({ trace }) {
+  return (
+    <ol className="steps">
+      {stepsOf(trace).map((step) => (
+        <li key={step.label} className={`${step.done ? "step-done" : ""} ${step.ended ? "step-ended" : ""}`}>
+          <span className="step-mark" aria-hidden="true">{step.ended ? "×" : step.done ? "✓" : ""}</span>
+          <span>{step.label}<span className="visually-hidden">{step.done ? ", done" : ", not yet"}</span></span>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 function Actions({ trace, orderId, onChanged }) {
@@ -67,9 +96,10 @@ function Actions({ trace, orderId, onChanged }) {
   if (buttons.length === 0) return null;
   return (
     <div className="action-area">
+      <p className="action-title">Next step</p>
       <div className="action-row">
         {buttons.map(([label, onClick, style]) => (
-          <button key={label} type="button" className={`btn btn-sm ${style}`} disabled={busy} onClick={onClick}>{label}</button>
+          <button key={label} type="button" className={`btn ${style}`} disabled={busy} onClick={onClick}>{label}</button>
         ))}
       </div>
       <ErrorNote text={error} />
@@ -110,22 +140,22 @@ function ReturnForm({ sale, onChanged }) {
 
 function Candidates({ decision }) {
   const rows = decision.candidates || [];
-  if (rows.length === 0) return <Empty>No location could sell this SKU on this channel.</Empty>;
+  if (rows.length === 0) return <Empty title="No candidates">No location could sell this SKU on this channel.</Empty>;
   return (
     <div className="table-wrap">
-      <table className="table data-table compact-table">
+      <table className="table data-table compact-table stack-on-phone">
         <thead>
           <tr><th>Considered, best first</th><th className="num">ATP</th><th className="num">Safety</th><th className="num">Buffer</th><th className="num">From the shelf</th><th className="num">Promisable</th></tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.location_id} className={row.location_id === decision.chosen_location_id ? "row-chosen" : ""}>
-              <td>{row.location_id}{row.location_id === decision.chosen_location_id && <small className="chosen-tag"> chosen</small>}</td>
-              <td className="num">{number(row.atp)}</td>
-              <td className="num">{number(row.safety_stock)}</td>
-              <td className="num">{number(row.buffer_units)}</td>
-              <td className="num">{number(row.from_on_hand)}</td>
-              <td className="num">{number(row.promisable)}</td>
+              <td className="cell-title">{row.location_id}{row.location_id === decision.chosen_location_id && <small className="chosen-tag"> chosen</small>}</td>
+              <td className="num" data-label="ATP">{number(row.atp)}</td>
+              <td className="num" data-label="Safety">{number(row.safety_stock)}</td>
+              <td className="num" data-label="Buffer">{number(row.buffer_units)}</td>
+              <td className="num" data-label="From the shelf">{number(row.from_on_hand)}</td>
+              <td className="num strong" data-label="Promisable">{number(row.promisable)}</td>
             </tr>
           ))}
         </tbody>
@@ -136,11 +166,12 @@ function Candidates({ decision }) {
 
 export default function OrderTrace({ orderId }) {
   const trace = useLoad(() => api.get(`/orders/${orderId}/trace`), [orderId]);
+  const backLink = <a href="#/orders">← All orders</a>;
 
   if (trace.error) {
-    return (<><PageHeader eyebrow={<a href="#/orders">All orders</a>} title={orderId} /><ErrorNote text={trace.error} /></>);
+    return (<><PageHeader eyebrow={backLink} title={orderId} /><ErrorNote text={trace.error} onRetry={trace.reload} /></>);
   }
-  if (!trace.data) return <Loading />;
+  if (!trace.data) return <Loading page />;
 
   const data = trace.data;
   const order = data.order;
@@ -149,24 +180,22 @@ export default function OrderTrace({ orderId }) {
 
   return (
     <>
-      <PageHeader eyebrow={<a href="#/orders">All orders</a>} title={order.order_id}
-                  actions={<Badge code={order.status} />}>
+      <PageHeader eyebrow={backLink} title={order.order_id} actions={<Badge code={order.status} />}>
         Placed {dateTime(order.placed_at)} on {words(order.channel_code).toLowerCase()}, shipping to {words(order.ship_to_region).toLowerCase()}.
         {expiresAt && ` The hold runs out at ${dateTime(expiresAt)}.`}
       </PageHeader>
 
-      <div className="tiles tiles-four">
-        <Tile label="Order total" value={money(order.order_total)} note={`${data.lines.length} line${data.lines.length === 1 ? "" : "s"}`} />
-        <Tile label="Holds" value={number(data.reservations.length)} note={[...new Set(data.reservations.map((row) => words(row.status)))].join(", ")} />
-        <Tile label="Ledger rows" value={number(data.movements.length + data.returns.length)} note="Stock that really moved" />
-        <div className="tile">
-          <p className="tile-label">Traceable end to end</p>
-          <p className="tile-value"><Verdict good={data.fully_traceable}>{data.fully_traceable ? "Yes" : "No"}</Verdict></p>
-          <p className="tile-note">Each used hold leads to a sale and a parcel</p>
-        </div>
-      </div>
+      <Panel className="progress-panel">
+        <OrderSteps trace={data} />
+        <Actions trace={data} orderId={orderId} onChanged={trace.reload} />
+      </Panel>
 
-      <Actions trace={data} orderId={orderId} onChanged={trace.reload} />
+      <Stats>
+        <Stat lead label="Order total" value={money(order.order_total)} note={`${data.lines.length} line${data.lines.length === 1 ? "" : "s"}`} />
+        <Stat label="Holds" value={number(data.reservations.length)} note={[...new Set(data.reservations.map((row) => words(row.status)))].join(", ") || "None"} />
+        <Stat label="Ledger rows" value={number(data.movements.length + data.returns.length)} note="Stock that really moved" />
+        <Stat label="Traceable end to end" value={<Verdict good={data.fully_traceable}>{data.fully_traceable ? "Yes" : "No"}</Verdict>} note="Each used hold leads to a sale and a parcel" />
+      </Stats>
 
       <div className="grid-trace">
         <div>
@@ -192,25 +221,27 @@ export default function OrderTrace({ orderId }) {
             ))}
           </Panel>
 
-          <Panel title="Holds and allocations">
-            <div className="table-wrap">
-              <table className="table data-table compact-table">
-                <thead><tr><th>Hold and allocation</th><th>At</th><th className="num">Units</th><th>From</th><th>First promise</th><th>Status</th></tr></thead>
-                <tbody>
-                  {data.reservations.map((row) => (
-                    <tr key={row.reservation_id}>
-                      <td className="nowrap">{row.reservation_id}<small className="cell-note">{row.allocation_id || "No allocation"}</small></td>
-                      <td className="nowrap">{row.location_id || "–"}</td>
-                      <td className="num">{number(row.qty)}</td>
-                      <td className="nowrap">{row.supply_type === "INBOUND" ? `Truck ${row.inbound_shipment_id}` : "Shelf"}</td>
-                      <td className="nowrap">{dateTime(row.promised_ship_by)}</td>
-                      <td><Badge code={row.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Panel>
+          {data.reservations.length > 0 && (
+            <Panel title="Holds and allocations">
+              <div className="table-wrap">
+                <table className="table data-table compact-table stack-on-phone">
+                  <thead><tr><th>Hold and allocation</th><th>At</th><th className="num">Units</th><th>From</th><th>First promise</th><th>Status</th></tr></thead>
+                  <tbody>
+                    {data.reservations.map((row) => (
+                      <tr key={row.reservation_id}>
+                        <td className="nowrap cell-title">{row.reservation_id}<small className="cell-note">{row.allocation_id || "No allocation"}</small></td>
+                        <td className="nowrap" data-label="At">{row.location_id || "–"}</td>
+                        <td className="num" data-label="Units">{number(row.qty)}</td>
+                        <td className="nowrap" data-label="From">{row.supply_type === "INBOUND" ? `Truck ${row.inbound_shipment_id}` : "Shelf"}</td>
+                        <td className="nowrap" data-label="First promise">{dateTime(row.promised_ship_by)}</td>
+                        <td data-label="Status"><Badge code={row.status} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          )}
 
           {data.movements.length > 0 && (
             <Panel title="Stock leaving the shelf" note="Immutable ledger rows. A return has to name its sale, and can’t pass what was sold.">

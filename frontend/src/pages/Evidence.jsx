@@ -1,6 +1,6 @@
 import api from "../api.js";
 import { BarList } from "../components/charts.jsx";
-import { ErrorNote, Loading, PageHeader, Panel, Tile, Verdict, useLoad } from "../components/ui.jsx";
+import { ErrorNote, Loading, PageHeader, Panel, Stat, Stats, Verdict, useLoad } from "../components/ui.jsx";
 import { number, percent, words } from "../format.js";
 
 const KIND_NAMES = {
@@ -16,8 +16,8 @@ function sumOf(rows, key) {
 
 export default function Evidence() {
   const metrics = useLoad(() => api.get("/metrics"), []);
-  if (metrics.error) return (<><PageHeader title="How we know it works" /><ErrorNote text={metrics.error} /></>);
-  if (!metrics.data) return <Loading />;
+  if (metrics.error) return (<><PageHeader title="Evidence" /><ErrorNote text={metrics.error} onRetry={metrics.reload} /></>);
+  if (!metrics.data) return <Loading page />;
 
   const m = metrics.data;
   const validation = m.validation;
@@ -26,17 +26,17 @@ export default function Evidence() {
 
   return (
     <>
-      <PageHeader eyebrow="Operations manager and reviewer" title="How we know it works">
-        Everything on this page was measured on the {m.dataset.scale} dataset, seed {m.dataset.seed}, by <code>eval.report</code>.
-        Live orders placed on this site don’t change it.
+      <PageHeader eyebrow="Operations manager and reviewer" title="Evidence">
+        How we know it works. Everything here was measured on the {m.dataset.scale} dataset, seed {m.dataset.seed},
+        by <code>eval.report</code>. Live orders placed on this site don’t change it.
       </PageHeader>
 
-      <div className="tiles tiles-four">
-        <Tile label="Clean baseline" value={`${m.clean_baseline?.checks - m.clean_baseline?.failed} of ${m.clean_baseline?.checks}`} note="Checks passed before anything is injected" />
-        <Tile label="Final data" value={`${validation?.passed} of ${validation?.checks}`} note={`${validation?.expected_failures.length} failures, each matched to labelled record IDs`} />
-        <Tile label="Unexpected failures" value={number(validation?.unexpected_failures.length)} note="A missed label or an unrelated failure counts here" />
-        <Tile label="Allocations traceable" value={percent(m.traceability.allocation_share, 0)} note={`${number(m.traceability.allocations_linked)} of ${number(m.traceability.allocations)}`} />
-      </div>
+      <Stats>
+        <Stat lead label="Clean baseline" value={`${m.clean_baseline?.checks - m.clean_baseline?.failed} of ${m.clean_baseline?.checks}`} note="Checks passed before anything is injected" />
+        <Stat label="Final data" value={`${validation?.passed} of ${validation?.checks}`} note={`${validation?.expected_failures.length} failures, each matched to labelled record IDs`} />
+        <Stat label="Unexpected failures" value={number(validation?.unexpected_failures.length)} note="A missed label or an unrelated failure counts here" />
+        <Stat label="Allocations traceable" value={percent(m.traceability.allocation_share, 0)} note={`${number(m.traceability.allocations_linked)} of ${number(m.traceability.allocations)}`} />
+      </Stats>
 
       <div className="note note-warn" role="note">
         <strong>Only {number(validation?.decisions_checked)} of {number(validation?.decisions_total)} order decisions were recalculated in SQL in this run.</strong>{" "}
@@ -46,23 +46,23 @@ export default function Evidence() {
 
       <Panel title="Failures on the final data" note="The validator fails these on purpose, because the labelled problems are in there. It doesn’t read the labels. A separate command compares the failing IDs with them.">
         <div className="table-wrap">
-          <table className="table data-table">
+          <table className="table data-table stack-on-phone">
             <thead><tr><th>Check that failed</th><th>Explained by</th><th className="num">Records</th><th>IDs match the labels</th></tr></thead>
             <tbody>
               {validation?.expected_failures.map((row) => (
                 <tr key={row.check}>
-                  <td>{row.check.charAt(0).toUpperCase() + row.check.slice(1)}</td>
-                  <td>{words(row.issue)}</td>
-                  <td className="num">{number(row.violations)}</td>
-                  <td><Verdict good>Exactly</Verdict></td>
+                  <td className="cell-title">{row.check.charAt(0).toUpperCase() + row.check.slice(1)}</td>
+                  <td data-label="Explained by">{words(row.issue)}</td>
+                  <td className="num" data-label="Records">{number(row.violations)}</td>
+                  <td data-label="IDs match the labels"><Verdict good>Exactly</Verdict></td>
                 </tr>
               ))}
               {validation?.unexpected_failures.map((row) => (
                 <tr key={row.check}>
-                  <td>{row.check}</td>
-                  <td>{row.problems.join(", ")}</td>
-                  <td className="num">–</td>
-                  <td><Verdict good={false}>No</Verdict></td>
+                  <td className="cell-title">{row.check}</td>
+                  <td data-label="Explained by">{row.problems.join(", ")}</td>
+                  <td className="num" data-label="Records">–</td>
+                  <td data-label="IDs match the labels"><Verdict good={false}>No</Verdict></td>
                 </tr>
               ))}
             </tbody>
@@ -72,19 +72,19 @@ export default function Evidence() {
 
       <Panel title="Detector scores against the ground truth" note="Decoys are valid records that look wrong. Flagging one counts against precision.">
         <div className="table-wrap">
-          <table className="table data-table">
+          <table className="table data-table stack-on-phone">
             <thead><tr><th>Problem</th><th className="num">Labelled</th><th className="num">Flagged</th><th className="num">Precision</th><th className="num">Recall</th><th className="num">F1</th><th className="num">Decoys</th><th className="num">Decoys flagged</th></tr></thead>
             <tbody>
               {detectors.map(([code, row]) => (
                 <tr key={code}>
-                  <td>{words(code)}</td>
-                  <td className="num">{number(row.labelled)}</td>
-                  <td className="num">{number(row.flagged)}</td>
-                  <td className="num strong">{percent(row.precision, 0)}</td>
-                  <td className="num strong">{percent(row.recall, 0)}</td>
-                  <td className="num">{percent(row.f1, 0)}</td>
-                  <td className="num">{number(row.decoys)}</td>
-                  <td className="num">{number(row.decoys_flagged)}</td>
+                  <td className="cell-title">{words(code)}</td>
+                  <td className="num" data-label="Labelled">{number(row.labelled)}</td>
+                  <td className="num" data-label="Flagged">{number(row.flagged)}</td>
+                  <td className="num strong" data-label="Precision">{percent(row.precision, 0)}</td>
+                  <td className="num strong" data-label="Recall">{percent(row.recall, 0)}</td>
+                  <td className="num" data-label="F1">{percent(row.f1, 0)}</td>
+                  <td className="num" data-label="Decoys">{number(row.decoys)}</td>
+                  <td className="num" data-label="Decoys flagged">{number(row.decoys_flagged)}</td>
                 </tr>
               ))}
             </tbody>
@@ -98,8 +98,8 @@ export default function Evidence() {
           <ul className="check-list">
             {kinds.map(([code, row]) => (
               <li key={code}>
-                <Verdict good={row.matched === row.checked && row.checked > 0}>{row.matched} of {row.checked}</Verdict>
                 <span>{KIND_NAMES[code] || words(code)}</span>
+                <Verdict good={row.matched === row.checked && row.checked > 0}>{row.matched} of {row.checked}</Verdict>
               </li>
             ))}
           </ul>
@@ -107,10 +107,10 @@ export default function Evidence() {
 
         <Panel title="Rules holding across the data">
           <ul className="check-list">
-            <li><Verdict good={m.oversell.blocked_rate === 1}>{number(m.oversell.blocked)} of {number(m.oversell.attempts)}</Verdict><span>Oversell attempts refused</span></li>
-            <li><Verdict good={m.traceability.shipment_share === 1}>{number(m.traceability.consumed_with_sale_and_parcel)} of {number(m.traceability.consumed_holds)}</Verdict><span>Used holds leading to a sale and a parcel</span></li>
-            <li><Verdict good={m.unrelated_problems.length === 0}>{number(m.unrelated_problems.length)} problems</Verdict><span>Clean rows changed by injection</span></li>
-            <li><Verdict good={m.reproducibility?.different.length === 0}>{m.reproducibility ? `${m.reproducibility.files_compared} files` : "Not run"}</Verdict><span>Identical from the same seed, including ground truth</span></li>
+            <li><span>Oversell attempts refused</span><Verdict good={m.oversell.blocked_rate === 1}>{number(m.oversell.blocked)} of {number(m.oversell.attempts)}</Verdict></li>
+            <li><span>Used holds leading to a sale and a parcel</span><Verdict good={m.traceability.shipment_share === 1}>{number(m.traceability.consumed_with_sale_and_parcel)} of {number(m.traceability.consumed_holds)}</Verdict></li>
+            <li><span>Clean rows changed by injection</span><Verdict good={m.unrelated_problems.length === 0}>{number(m.unrelated_problems.length)} problems</Verdict></li>
+            <li><span>Identical from the same seed, including ground truth</span><Verdict good={m.reproducibility?.different.length === 0}>{m.reproducibility ? `${m.reproducibility.files_compared} files` : "Not run"}</Verdict></li>
           </ul>
         </Panel>
       </div>
@@ -141,7 +141,7 @@ export default function Evidence() {
             <div><dt>Stock on the road at the end</dt><dd>{number(m.network.in_transit_units)} <small>{number(m.network.in_transit_trucks)} trucks</small></dd></div>
             <div><dt>One full ATP answer</dt><dd>{m.atp_speed.median_ms} ms <small>median, slowest {m.atp_speed.slowest_ms} ms</small></dd></div>
           </dl>
-          <p className="table-foot">Orders by channel</p>
+          <p className="section-label">Orders by channel</p>
           <BarList rows={m.mix.channels.map((row) => ({ label: words(row.channel), value: row.orders }))} />
         </Panel>
       </div>

@@ -1,10 +1,10 @@
 import { useState } from "react";
 import api, { errorText } from "../api.js";
-import { Badge, Empty, ErrorNote, Loading, PageHeader, Panel, SkuPicker, useDefaultSku, useLoad } from "../components/ui.jsx";
+import { Badge, Empty, ErrorNote, Icon, Loading, PageHeader, Panel, Segmented, SkuPicker, useDefaultSku, useLoad } from "../components/ui.jsx";
 import { dateTime, money, number, words } from "../format.js";
 
 const REGIONS = ["SOUTH", "NORTH", "EAST", "WEST", "CENTRAL"];
-const DECISIONS = ["", "SINGLE", "SPLIT", "INBOUND", "REJECTED", "REALLOCATED"];
+const DECISIONS = ["", "SINGLE", "SPLIT", "INBOUND", "REJECTED", "REALLOCATED"].map((code) => ({ value: code, label: code ? words(code) : "All" }));
 const PAGE_SIZE = 15;
 
 function NewOrder({ onPlaced }) {
@@ -34,7 +34,7 @@ function NewOrder({ onPlaced }) {
   }
 
   return (
-    <Panel title="Place an order" note="Goes through the same locked allocation as everything else, and really writes to the database">
+    <Panel title="Place an order" note="Goes through the same locked allocation as everything else, and really writes to the database. Ask for more than is available to see the refusal.">
       <form onSubmit={place} className="order-form">
         <div className="form-wide"><SkuPicker value={sku} onChange={setSku} /></div>
         <div>
@@ -59,28 +59,29 @@ function NewOrder({ onPlaced }) {
           <button type="submit" className="btn btn-primary" disabled={busy || !sku}>{busy ? "Placing…" : "Place order"}</button>
         </div>
       </form>
-      <p className="table-foot">Ask for more than is available to see the oversell refusal. A refused order is kept, with its reason.</p>
 
-      <ErrorNote text={error} />
-      {result && (
-        <div className={`note ${result.status === "REJECTED" ? "note-bad" : "note-good"}`} role="status">
-          <div className="note-title">
-            <strong>{result.order_id}</strong> <Badge code={result.status} /> <span>{money(result.order_total)}</span>
-            <a className="ms-auto" href={`#/orders/${result.order_id}`}>Open its trace</a>
+      <div className="form-result">
+        <ErrorNote text={error} />
+        {result && (
+          <div className={`note ${result.status === "REJECTED" ? "note-bad" : "note-good"}`} role="status">
+            <div className="note-title">
+              <strong>{result.order_id}</strong> <Badge code={result.status} /> <span>{money(result.order_total)}</span>
+              <a className="ms-auto" href={`#/orders/${result.order_id}`}>Open its trace →</a>
+            </div>
+            {result.lines.map((line) => (
+              <p key={line.order_line_id} className="mb-0">
+                {line.sku_id} × {number(line.qty)}: <strong>{words(line.decision_code)}</strong>, {words(line.reason_code).toLowerCase()}
+                {line.allocations.map((part) => (
+                  <span key={part.reservation_id} className="d-block cell-note">
+                    {part.qty} held at {part.location_id} from {part.supply_type === "INBOUND" ? `truck ${part.inbound_shipment_id}` : "the shelf"},
+                    {" "}until {dateTime(part.expires_at)}. Ship by {dateTime(part.promised_ship_by)}.
+                  </span>
+                ))}
+              </p>
+            ))}
           </div>
-          {result.lines.map((line) => (
-            <p key={line.order_line_id} className="mb-0">
-              {line.sku_id} × {line.qty}: <strong>{words(line.decision_code)}</strong>, {words(line.reason_code).toLowerCase()}
-              {line.allocations.map((part) => (
-                <span key={part.reservation_id} className="d-block cell-note">
-                  {part.qty} held at {part.location_id} from {part.supply_type === "INBOUND" ? `truck ${part.inbound_shipment_id}` : "the shelf"},
-                  {" "}until {dateTime(part.expires_at)}. Ship by {dateTime(part.promised_ship_by)}.
-                </span>
-              ))}
-            </p>
-          ))}
-        </div>
-      )}
+        )}
+      </div>
     </Panel>
   );
 }
@@ -99,48 +100,60 @@ export default function Orders() {
     setOffset(0);
   }
 
+  function clearFilters() {
+    setSearch("");
+    chooseDecision("");
+  }
+
   return (
     <>
-      <PageHeader eyebrow="Customer and analyst" title="Orders and the decision behind each one">
+      <PageHeader eyebrow="Customer and analyst" title="Orders">
         Every line records which location was chosen and why, including the ones that were refused.
       </PageHeader>
 
       <NewOrder onPlaced={orders.reload} />
 
-      <Panel title="All orders" note={orders.data ? `${number(orders.data.total)} match. Newest first.` : " "}
-             actions={
-               <input className="form-control form-control-sm search-box" type="search" aria-label="Search orders by order or SKU"
-                      placeholder="Search order or SKU" value={search}
-                      onChange={(event) => { setSearch(event.target.value); setOffset(0); }} />
-             }>
-        <div className="chip-row" role="group" aria-label="Filter by decision">
-          {DECISIONS.map((code) => (
-            <button key={code} type="button" className={`chip ${code === decision ? "active" : ""}`} aria-pressed={code === decision}
-                    onClick={() => chooseDecision(code)}>{code ? words(code) : "All decisions"}</button>
-          ))}
+      <Panel title="All orders" note={orders.data ? `${number(orders.data.total)} match, newest first` : " "}>
+        <div className="table-tools">
+          <div>
+            <span className="form-label d-block">Decision</span>
+            <Segmented label="Filter by decision" options={DECISIONS} value={decision} onChange={chooseDecision} />
+          </div>
+          <div className="search-box">
+            <label className="form-label" htmlFor="order-search">Search</label>
+            <div className="input-with-icon">
+              <Icon name="search" size={16} />
+              <input id="order-search" className="form-control" type="search" placeholder="Order or SKU" value={search}
+                     onChange={(event) => { setSearch(event.target.value); setOffset(0); }} />
+            </div>
+          </div>
         </div>
 
-        <ErrorNote text={orders.error} />
-        {orders.loading && !orders.data && <Loading />}
-        {orders.data && orders.data.orders.length === 0 && <Empty>No orders match that.</Empty>}
+        <ErrorNote text={orders.error} onRetry={orders.reload} />
+        {orders.loading && !orders.data && <Loading rows={8} />}
+        {orders.data && orders.data.orders.length === 0 && (
+          <Empty title="No orders match that" action={<button type="button" className="btn btn-sm btn-outline-secondary" onClick={clearFilters}>Clear filters</button>}>
+            Try another search, or show every decision.
+          </Empty>
+        )}
         {orders.data && orders.data.orders.length > 0 && (
-          <>
+          <div className={orders.loading ? "refreshing" : ""}>
             <div className="table-wrap">
-              <table className="table data-table table-hover">
+              <table className="table data-table table-hover stack-on-phone">
                 <thead>
                   <tr><th>Order</th><th>Placed</th><th>Channel</th><th>Ship to</th><th className="num">Lines</th><th>Decision</th><th>Status</th><th className="num">Total</th></tr>
                 </thead>
                 <tbody>
                   {orders.data.orders.map((order) => (
                     <tr key={order.order_id}>
-                      <td><a href={`#/orders/${order.order_id}`} className="id-link">{order.order_id}</a></td>
-                      <td className="nowrap">{dateTime(order.placed_at)}</td>
-                      <td>{words(order.channel_code)}</td>
-                      <td>{words(order.ship_to_region)}</td>
-                      <td className="num">{order.lines}</td>
-                      <td>{order.decisions ? order.decisions.split(", ").map(words).join(", ") : "–"}</td>
-                      <td><Badge code={order.status} /></td>
-                      <td className="num">{money(order.order_total)}</td>
+                      <td className="cell-title"><a href={`#/orders/${order.order_id}`} className="id-link">{order.order_id}</a></td>
+                      <td className="nowrap" data-label="Placed">{dateTime(order.placed_at)}</td>
+                      <td data-label="Channel">{words(order.channel_code)}</td>
+                      <td data-label="Ship to">{words(order.ship_to_region)}</td>
+                      <td className="num" data-label="Lines">{order.lines}</td>
+                      <td data-label="Decision">{order.decisions ? order.decisions.split(", ").map(words).join(", ") : "–"}</td>
+                      <td data-label="Status"><Badge code={order.status} /></td>
+                      <td className="num strong" data-label="Total">{money(order.order_total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -151,7 +164,7 @@ export default function Orders() {
               <span>{number(offset + 1)} to {number(Math.min(offset + PAGE_SIZE, orders.data.total))} of {number(orders.data.total)}</span>
               <button type="button" className="btn btn-sm btn-outline-secondary" disabled={offset + PAGE_SIZE >= orders.data.total} onClick={() => setOffset(offset + PAGE_SIZE)}>Older</button>
             </div>
-          </>
+          </div>
         )}
       </Panel>
     </>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api.js";
 import { StockLine } from "../components/charts.jsx";
-import { Badge, ErrorNote, Loading, PageHeader, Panel, SkuPicker, Tile, Verdict, useDefaultSku, useLoad } from "../components/ui.jsx";
+import { Badge, Empty, ErrorNote, Loading, PageHeader, Panel, SkuPicker, Stat, Stats, Verdict, useDefaultSku, useLoad } from "../components/ui.jsx";
 import { dateTime, number, words } from "../format.js";
 
 function signed(value) {
@@ -39,12 +39,12 @@ export default function Ledger({ skuId, locationId }) {
 
   return (
     <>
-      <PageHeader eyebrow="Store and warehouse operator" title="Every movement of one SKU at one location">
-        The ledger can only be added to, and the database itself refuses a change. Stock after each row is
-        worked out from the opening balance, then checked against the stored closing balance.
+      <PageHeader eyebrow="Store and warehouse operator" title="Stock ledger">
+        Every movement of one SKU at one location. The ledger can only be added to, and the database itself
+        refuses a change. Stock after each row is worked out from the opening balance, then checked against the stored closing balance.
       </PageHeader>
 
-      <Panel>
+      <Panel className="filter-panel">
         <div className="filter-row">
           <div className="filter-grow"><SkuPicker value={sku} onChange={setSku} /></div>
           <div className="filter-grow">
@@ -56,60 +56,61 @@ export default function Ledger({ skuId, locationId }) {
         </div>
       </Panel>
 
-      <ErrorNote text={ledger.error} />
-      {ledger.loading && !data && <Loading />}
+      <ErrorNote text={ledger.error} onRetry={ledger.reload} />
+      {ledger.loading && !data && <Panel><Loading /></Panel>}
 
       {data && (
-        <>
-          <div className="tiles tiles-four">
-            <Tile label="On hand now" value={number(data.current_on_hand)} note={`${number(data.current_blocked)} blocked, opened at ${number(data.opening.on_hand)}, ${number(data.total_rows)} rows since`} />
-            <Tile label="Ledger at the closing snapshot" value={number(data.at_snapshot_on_hand)} note={`${number(data.at_snapshot_blocked)} blocked. Opening plus rows up to then`} />
-            <Tile label="Stored closing balance" value={data.stored_closing ? number(data.stored_closing.on_hand) : "–"} note={data.stored_closing ? `${number(data.stored_closing.blocked)} blocked, at ${dateTime(data.stored_closing.as_of_at)}` : "None stored"} />
-            <div className="tile">
-              <p className="tile-label">Reconciles</p>
-              <p className="tile-value"><Verdict good={data.reconciles}>{data.reconciles ? "Yes" : "No"}</Verdict></p>
-              <p className="tile-note">{data.reconciles ? "The ledger at that moment equals the stored balance" : "The stored balance differs from the ledger at that moment. ATP keeps using the ledger."}</p>
-            </div>
-          </div>
+        <div className={ledger.loading ? "refreshing" : ""}>
+          <Stats>
+            <Stat lead label="On hand now" value={number(data.current_on_hand)} note={`${number(data.current_blocked)} blocked. Opened at ${number(data.opening.on_hand)}, ${number(data.total_rows)} rows since`} />
+            <Stat label="Ledger at the closing snapshot" value={number(data.at_snapshot_on_hand)} note={`${number(data.at_snapshot_blocked)} blocked. Opening plus rows up to then`} />
+            <Stat label="Stored closing balance" value={data.stored_closing ? number(data.stored_closing.on_hand) : "–"} note={data.stored_closing ? `${number(data.stored_closing.blocked)} blocked, at ${dateTime(data.stored_closing.as_of_at)}` : "None stored"} />
+            <Stat label="Reconciles" value={<Verdict good={data.reconciles}>{data.reconciles ? "Yes" : "No"}</Verdict>}
+                  note={data.reconciles ? "The ledger at that moment equals the stored balance" : "The stored balance differs from the ledger at that moment. ATP keeps using the ledger."} />
+          </Stats>
 
           <Panel title="On hand over time" note="Move across the chart for the stock at any point">
             <StockLine points={data.history} opening={data.opening.on_hand} openingAt={data.opening.as_of_at} />
           </Panel>
 
           <Panel title="Ledger rows" note={`Newest first. Showing ${number(data.rows.length)} of ${number(data.total_rows)}.`}>
-            <div className="table-wrap">
-              <table className="table data-table">
-                <thead>
-                  <tr><th>When</th><th>Movement</th><th>Bucket</th><th className="num">Change</th><th className="num">On hand after</th><th className="num">Blocked after</th><th>Reason</th><th>Document</th><th>Link</th></tr>
-                </thead>
-                <tbody>
-                  {data.rows.map((row) => (
-                    <tr key={row.movement_id}>
-                      <td className="nowrap">{dateTime(row.occurred_at)}<small className="cell-note">{row.movement_id}</small></td>
-                      <td>{words(row.movement_type)}</td>
-                      <td>{row.stock_bucket === "BLOCKED" ? <Badge code="BLOCKED" tone="warn" /> : words(row.stock_bucket)}</td>
-                      <td className={`num strong ${row.quantity < 0 ? "qty-out" : "qty-in"}`}>{signed(row.quantity)}</td>
-                      <td className="num">{number(row.on_hand_after)}</td>
-                      <td className="num">{number(row.blocked_after)}</td>
-                      <td>{words(row.reason_code)}</td>
-                      <td className="nowrap small-text">{row.source_doc}</td>
-                      <td className="nowrap">
-                        {row.order_id && <a href={`#/orders/${row.order_id}`}>Order</a>}
-                        {!row.order_id && row.related_movement_id && <span className="small-text">Sale {row.related_movement_id}</span>}
-                        {!row.order_id && row.shipment_id && <span className="small-text">{row.shipment_id}</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {data.rows.length === 0 && <Empty title="No movements yet">This stock has only its opening balance.</Empty>}
+            {data.rows.length > 0 && (
+              <div className="table-wrap">
+                <table className="table data-table stack-on-phone">
+                  <thead>
+                    <tr><th>When</th><th>Movement</th><th>Bucket</th><th className="num">Change</th><th className="num">On hand after</th><th className="num">Blocked after</th><th>Reason</th><th>Document</th><th>Link</th></tr>
+                  </thead>
+                  <tbody>
+                    {data.rows.map((row) => (
+                      <tr key={row.movement_id}>
+                        <td className="nowrap cell-title">{dateTime(row.occurred_at)}<small className="cell-note">{row.movement_id}</small></td>
+                        <td data-label="Movement">{words(row.movement_type)}</td>
+                        <td data-label="Bucket">{row.stock_bucket === "BLOCKED" ? <Badge code="BLOCKED" tone="warn" /> : words(row.stock_bucket)}</td>
+                        <td className={`num strong ${row.quantity < 0 ? "qty-out" : "qty-in"}`} data-label="Change">{signed(row.quantity)}</td>
+                        <td className="num" data-label="On hand after">{number(row.on_hand_after)}</td>
+                        <td className="num" data-label="Blocked after">{number(row.blocked_after)}</td>
+                        <td data-label="Reason">{words(row.reason_code)}</td>
+                        <td className="nowrap small-text" data-label="Document">{row.source_doc}</td>
+                        <td className="nowrap" data-label="Link">
+                          {row.order_id && <a href={`#/orders/${row.order_id}`}>Order</a>}
+                          {!row.order_id && row.related_movement_id && <span className="small-text">Sale {row.related_movement_id}</span>}
+                          {!row.order_id && row.shipment_id && <span className="small-text">{row.shipment_id}</span>}
+                          {!row.order_id && !row.related_movement_id && !row.shipment_id && "–"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
             {data.rows.length < data.total_rows && limit < 200 && (
               <div className="pager">
                 <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setLimit(200)}>Show up to 200 rows</button>
               </div>
             )}
           </Panel>
-        </>
+        </div>
       )}
     </>
   );

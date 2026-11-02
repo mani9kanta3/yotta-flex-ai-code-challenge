@@ -59,7 +59,7 @@ Updated after every step. "Built" means the code exists, it ran, and tests cover
 | Late trucks | Handled when the notice comes in, and by `handle_overdue_trucks` | `handle_overdue_trucks` runs when asked, by a button and `POST /api/trucks/handle-overdue`. Nothing runs it on a schedule |
 | Replenishment | Rules are calculated, reorders move through the three levels | First stock for a late SKU or new store is a direct delivery, not a transfer. One reorder at a time per pair, instead of the plan's position formula |
 | Returns | Good and damaged returns in live code and generated data | No return window |
-| React page | Every page, the order flow and truck actions, checked by hand in a browser, in light and dark, and at phone width | No automated browser tests. Tested by hand on the starter data, and opened on the full data |
+| React page | Every page, the order flow and truck actions, checked by hand in a browser at desktop, tablet and phone widths, with dark mode spot-checked on three pages. The redesign was checked this way on starter data | No automated browser tests. The redesign wasn't opened on the full data, on a real phone, or on the Render demo |
 | Login | Nothing | There is none. Anyone who can reach the local API can write. It is a local demo of the rules |
 | AI_USAGE.md | Implementation and Codex review assistance disclosed; personal section drafted from the conversation record | Manikanta must read the AI-assisted draft and correct anything that does not describe his experience |
 | Live stock changes | Orders, transfers, shipping, returns and late handling take the SKU-location lock | Walk-in sales, BLOCK, UNBLOCK, WRITE_OFF and adjustments exist only in the generator, with no live version |
