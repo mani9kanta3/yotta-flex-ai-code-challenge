@@ -4,6 +4,12 @@ One view of stock across stores, warehouses and online channels, accounting for 
 safety stock and stock on trucks. Built for the YottaFlex AI code challenge. The full brief is in
 [docs/brief.md](docs/brief.md).
 
+**[Open the live demo](https://yotta-flex-inventory.onrender.com/#/)**
+
+The hosted demo uses the starter dataset: 300 SKUs, 12 locations, 20,000 movements
+and 1,000 generated orders. Order actions are enabled and change the shared demo data.
+The full dataset can be generated locally using the commands below.
+
 ![The overview page](docs/screenshots/overview.png)
 
 ## The problem
