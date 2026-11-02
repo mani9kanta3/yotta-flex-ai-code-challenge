@@ -9,7 +9,7 @@ that I wrote the implementation myself or independently verified every result.
 **Tools:** Claude Code, in the Claude desktop app, for implementation, as recorded in this
 repository; and OpenAI Codex for a separate review conversation, fix prompts and this disclosure
 edit. Every message to Claude Code is in [prompt-history/](prompt-history/), including the short
-ones. The Codex prompts have not been added yet. Several instructions sent to the implementation assistant were drafted by Codex.
+ones. The [Codex prompt archive](prompt-history/codex/README.md) contains all 21 user messages in the saved review conversation through “you do the prompt history” on 2 November 2026, including all nine pasted text attachments. Several instructions sent to the implementation assistant were drafted by Codex.
 
 **What the AI wrote:** the first draft of the plan, and all of the code, SQL, tests and
 documentation in this repository. That includes the generator, the API, the React page and
@@ -30,6 +30,7 @@ this disclosure. I am not presenting AI-generated code or review suggestions as 
 | [8](prompt-history/08-believable-truck-times.md) | Removing the one-second truck pattern without adding another |
 | [9](prompt-history/09-finish-the-project.md) | Finishing the remaining steps in one go |
 | [10](prompt-history/10-fix-review-findings.md) | Fixing the findings in `docs/FINAL_REVIEW.md`, each with a test written first |
+| [12](prompt-history/12-balance-dates.md) | Comparing every balance's date after a changed date passed the check. File 11 holds the short messages |
 
 **How results were checked:** the AI ran the commands and quoted their output, which is what the
 numbers in the README and `docs/STATUS.md` come from. It also broke the code on purpose in a

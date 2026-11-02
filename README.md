@@ -106,7 +106,7 @@ Each step of `run_all` can also run on its own. Write `.\venv\Scripts\python.exe
 | `python -m scripts.run_detect` | The four detectors fill `inventory_exception` |
 | `python -m eval.score --scale starter` | Precision and recall per type |
 | `python -m eval.check_atp --scale starter` | ATP worked out a second way agrees with SQL |
-| `python -m eval.check_unrelated --scale starter` | Every clean row of all 18 tables is still there through the renumbering, links included, and every new row belongs to a case |
+| `python -m eval.check_unrelated --scale starter` | Every clean row of all 18 tables is still there through the renumbering, links and balance dates included, and every new row belongs to a case |
 | `python -m scripts.compare_runs --scale starter` | Same seed twice, every file compared byte for byte |
 | `python -m eval.report --scale starter` | Writes `metrics_summary.json`, which the site shows |
 | `python -m eval.try_seeds --first 1 --count 20` | Runs all of it on other seeds |
@@ -174,7 +174,7 @@ expired hold back after someone else took the stock. See [docs/FINAL_REVIEW.md](
 finding now has tests that failed before the fix, in `backend/tests/test_review_findings.py`, and
 [docs/STATUS.md](docs/STATUS.md) says what was done about each one.
 
-**Tests.** All 865 tests pass, in about 14 minutes, including 20 orders racing for one unit through the
+**Tests.** All 872 tests pass, in about 14 minutes, including 20 orders racing for one unit through the
 API. Separately, bugs were introduced on purpose in a scratch copy to see whether the tests notice. That was
 done for each step as it was built, 172 bugs in all, and each was caught, some only after a test was added
 for it. Those lists were not rerun together on the final code. The tests for the review's findings were each seen
@@ -288,7 +288,10 @@ starter. That is more than most retailers would see, and the generator's popular
 - A separate restricted database role. The triggers refuse UPDATE, DELETE and TRUNCATE on history, but the
   app connects as the owner, who could switch them off. They stop mistakes, not an administrator.
 - An exception audit trail. Running the detectors replaces the last results, so it shows the latest answer only.
-- No automated browser tests. The site was checked by hand in a browser.
+- No automated browser tests. The site was checked by hand in a browser, but not every action on it.
+- Run only one test suite at a time. Separate checkouts use the same test database names, so two runs on one
+  database server break each other with dropped connections and deadlocks.
+- Not tried on a fresh machine. Fresh clones were run with the README's commands, but on the laptop this was built on.
 
 **Not load-tested.** Orders race correctly in tests with 20 threads, but nothing measured the API under sustained
 traffic. An order holds its locks for about as long as an ATP answer takes, per line. The ledger page reads every

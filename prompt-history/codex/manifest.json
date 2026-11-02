@@ -1,0 +1,53 @@
+{
+  "source_session": "rollout-2026-10-31T14-58-13-01a19149-c238-7c52-b080-0e34dbfcacf7.jsonl",
+  "through_recorded_at_utc": "2026-11-02T03:45:21.656Z",
+  "user_message_count": 21,
+  "attachment_count": 9,
+  "attachments": [
+    {
+      "file": "attachments/01-78e695f6-4739-42a3-aba9-4a45672a56ec.txt",
+      "original_path": "C:\\Users\\MANIKANTA\\.codex/attachments/78e695f6-4739-42a3-aba9-4a45672a56ec/Pasted text.txt",
+      "sha256": "6dac3d7a1d1a8f239d740cc739c5799eb4cc8a035b09470852cd64cbf6c4dd7d"
+    },
+    {
+      "file": "attachments/02-571e503c-fe22-48a5-8c16-568f7c1bcc60.txt",
+      "original_path": "C:\\Users\\MANIKANTA\\.codex/attachments/571e503c-fe22-48a5-8c16-568f7c1bcc60/Pasted text.txt",
+      "sha256": "0c26a03b3a2effae59c1d6b7b650482f5b5621597b31b1450b1604405e15d01c"
+    },
+    {
+      "file": "attachments/03-78ee02be-9f6f-4428-9832-3fdb0266fa82.txt",
+      "original_path": "C:\\Users\\MANIKANTA\\.codex/attachments/78ee02be-9f6f-4428-9832-3fdb0266fa82/Pasted text.txt",
+      "sha256": "61b2087ee9b724c768424212e633854e460e60f9cd613c9ba5d3671d0715c751"
+    },
+    {
+      "file": "attachments/04-98d92259-2118-4fdf-b97b-e95c03799a65.txt",
+      "original_path": "C:\\Users\\MANIKANTA\\.codex/attachments/98d92259-2118-4fdf-b97b-e95c03799a65/Pasted text.txt",
+      "sha256": "f21785b6d58918712d198155892a95eff0bcf8e317d8f9fd352064e90b7b8c88"
+    },
+    {
+      "file": "attachments/05-84c55f2b-6e1d-4f86-816f-2f422fc0a72f.txt",
+      "original_path": "C:\\Users\\MANIKANTA\\.codex/attachments/84c55f2b-6e1d-4f86-816f-2f422fc0a72f/Pasted text.txt",
+      "sha256": "c7275f7a8bbdc2732013bd87f5a46c789d865704aabec545a3fc1b11a4f47649"
+    },
+    {
+      "file": "attachments/06-468e8bd9-32d7-4d73-861d-26588914fd22.txt",
+      "original_path": "C:\\Users\\MANIKANTA\\.codex/attachments/468e8bd9-32d7-4d73-861d-26588914fd22/Pasted text.txt",
+      "sha256": "d16403be08fc5acbbfcb7f2f6f0e10eebb32dacdc3fc38dbae98e7ccf30fc18b"
+    },
+    {
+      "file": "attachments/07-9405afc6-eb65-4fa6-b670-94604d85926f.txt",
+      "original_path": "C:\\Users\\MANIKANTA\\.codex/attachments/9405afc6-eb65-4fa6-b670-94604d85926f/Pasted text.txt",
+      "sha256": "d290e655b4dd2d0b04ff3616ef92b9ad2fa374370527bf28c4d0070f2822f858"
+    },
+    {
+      "file": "attachments/08-c3ad0549-c3b9-4f02-aa64-b74107f185ef.txt",
+      "original_path": "C:\\Users\\MANIKANTA\\.codex/attachments/c3ad0549-c3b9-4f02-aa64-b74107f185ef/Pasted text.txt",
+      "sha256": "40436e6074b4205d8ef65fab44771487fd5a715e86606ee6c88cadcc6cb3cbb5"
+    },
+    {
+      "file": "attachments/09-840c9d81-edbd-4d73-ad16-04c139eb81a4.txt",
+      "original_path": "C:\\Users\\MANIKANTA\\.codex/attachments/840c9d81-edbd-4d73-ad16-04c139eb81a4/Pasted text.txt",
+      "sha256": "8a0b0012b818a09ebe0eb5387a886794fcf30f48e1e98f89beb267d1e54c55fd"
+    }
+  ]
+}

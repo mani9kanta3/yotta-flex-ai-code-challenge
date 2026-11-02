@@ -14,5 +14,7 @@ between, word for word, recovered from the session's transcript. Times are IST.
 | 1 Nov, 18:07 | https://github.com/mani9kanta3/yotta-flex-ai-code-challenge submitting this one. okay right ? |
 | 1 Nov, 18:09 | let me know after completion |
 | 2 Nov, 01:20 | Can export this chat only ? |
+| 2 Nov, 01:26 | Now check everything is good and working right ? |
+| 2 Nov, during that check | you have repo link right or should I provide you ? |
 
-That transcript has 19 messages in all. The other 10 are in files 01 to 10 of this folder.
+That transcript has 22 messages in all. The other 11 are in files 01 to 10 and 12 of this folder.

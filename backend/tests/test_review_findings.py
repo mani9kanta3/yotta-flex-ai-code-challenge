@@ -468,6 +468,48 @@ def test_f4_a_balance_row_missing_from_the_final_data_is_noticed(generated_data,
     assert any("balance" in problem for problem in check_unrelated.compare_datasets(final_dir))
 
 
+# A case may change the stock in a closing balance, but never the balance's date or ID.
+BALANCES_TO_CHANGE = [
+    ("OPENING", False),
+    ("CLOSING", False),
+    ("CLOSING", True),
+]
+
+
+def balance_to_change(generated_data, rows, snapshot_type, on_a_case_sku):
+    case_skus = {row["sku_id"] for row in score.load_ground_truth(export.truth_dir_of(generated_data))
+                 if row["looks_like"] != "OVERSELL_ATTEMPT"}
+    return next(row for row in rows
+                if row["snapshot_type"] == snapshot_type and (row["sku_id"] in case_skus) == on_a_case_sku)
+
+
+@pytest.mark.parametrize("snapshot_type, on_a_case_sku", BALANCES_TO_CHANGE)
+def test_f4_a_changed_balance_date_is_noticed(generated_data, tmp_path, snapshot_type, on_a_case_sku):
+    final_dir = copy_of_run(generated_data, tmp_path)
+    rows = read_rows(final_dir, "inventory_balance")
+    balance_to_change(generated_data, rows, snapshot_type, on_a_case_sku)["as_of_at"] = "2099-09-30 23:59:59"
+    write_rows(final_dir, "inventory_balance", rows)
+    assert "1 balances changed their date or ID" in check_unrelated.compare_datasets(final_dir)
+
+
+@pytest.mark.parametrize("snapshot_type, on_a_case_sku", BALANCES_TO_CHANGE)
+def test_f4_a_changed_balance_id_is_noticed(generated_data, tmp_path, snapshot_type, on_a_case_sku):
+    final_dir = copy_of_run(generated_data, tmp_path)
+    rows = read_rows(final_dir, "inventory_balance")
+    balance_to_change(generated_data, rows, snapshot_type, on_a_case_sku)["balance_id"] = "BAL-9999999"
+    write_rows(final_dir, "inventory_balance", rows)
+    assert "1 balances changed their date or ID" in check_unrelated.compare_datasets(final_dir)
+
+
+def test_f4_a_repeated_balance_row_is_noticed(generated_data, tmp_path):
+    """Rows are looked up by SKU, location and type, so a second row with a new date could hide."""
+    final_dir = copy_of_run(generated_data, tmp_path)
+    rows = read_rows(final_dir, "inventory_balance")
+    repeated = dict(rows[0], as_of_at="2099-09-30 23:59:59")
+    write_rows(final_dir, "inventory_balance", rows + [repeated])
+    assert "the final data has 1 repeated balance rows" in check_unrelated.compare_datasets(final_dir)
+
+
 def test_f4_a_balance_row_only_the_final_data_has_is_noticed(generated_data, tmp_path):
     final_dir = copy_of_run(generated_data, tmp_path)
     rows = read_rows(export.clean_dir_of(final_dir), "inventory_balance")

@@ -59,7 +59,7 @@ done, partial or missing against the actual code and output, with its evidence.
 41. **Done.** Bridge tables for N:M. `sku_location`, `channel_location`, `order_allocation`.
 42. **Done.** Event history retained. `order_event`, `reservation_event`, `shipment_event`.
 43. **Done.** All joins validated. Validator counts broken references for every foreign key.
-44. **Done.** Anomalies labelled, unrelated rows untouched. `eval/check_unrelated.py` compares all 18 tables through the new IDs, at both scales: 0 clean rows changed, every new row labelled.
+44. **Done.** Anomalies labelled, unrelated rows untouched. `eval/check_unrelated.py` compares all 18 tables through the new IDs, at both scales: 0 clean rows changed, every new row labelled, and every balance keeps its date and ID.
 
 ## IDs
 
@@ -135,7 +135,7 @@ done, partial or missing against the actual code and output, with its evidence.
 102. **Done.** Starter dataset in the repo. `backend/data/starter/`.
 103. **Done.** One command recreates the full dataset. `python -m scripts.run_all --scale full`, run. Also `scripts.generate` on its own.
 104. **Done.** Tests. `backend/tests/`, all passing.
-105. **Partial.** `prompt-history/` folder. Every message to Claude Code is in files 01 to 11. Manikanta's Codex prompts still have to be added, as the FAQ asks for every tool.
+105. **Done for the recorded conversations through their stated cutoffs.** `prompt-history/` folder. Claude Code messages are in files 01 to 12. `prompt-history/codex/` archives all 21 user messages in the saved Codex review conversation through “you do the prompt history” on 2 November 2026, with all nine pasted text attachments. Later or unprovided conversations are outside this archive.
 106. **Partial.** `AI_USAGE.md` now includes a Codex-assisted personal section based on the conversation record, and discloses both implementation and review assistance. Manikanta still needs to read it and correct anything that does not describe his experience.
 
 ## Added after review

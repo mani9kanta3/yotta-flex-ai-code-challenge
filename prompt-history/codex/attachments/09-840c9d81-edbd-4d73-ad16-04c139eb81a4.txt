@@ -1,0 +1,58 @@
+The one-second truck pattern is gone, and everything you asked me to recheck holds at both scales, with the default seed. One thing got worse: fewer other seeds pass, 31 of 40 against 36 before (details below).
+Every truck now follows the same rules. It leaves during store hours and is due at noon after its lead time. It comes in between 00:00 and 09:00 that day, or the day before about 15% of the time.
+- The anomaly is unchanged: stock reaches the destination before it leaves the source, in all 50 full-scale cases and all 5 at starter.
+- Decoys: a decoy is now a short trip that beats its ETA, which looks premature but is valid because it left first. Two new hand-written tests cover the one-second edge the old decoys used to test.
+- Normal trucks needed fixing too: nearly all of them came in between 08:00 and 10:00, because the forward-only clock pushed them together. My first fix then made every late-dispatched truck arrive late, so I also shuffle each day’s rows. Arrival hours are now evenly spread.
+- Quantity: case trucks now use the normal reorder calculation. They still carry fewer units (median 3 against 8), because they sit on quieter SKUs.
+- Unrelated records: my earlier tests only covered this at starter scale, so I added eval.check_unrelated, which runs at both. It compares master data, opening and closing balances, movements, orders and shipments.
+- Detector scores: still 1.0 precision and recall for all four types, with no decoys flagged. I wrote both the anomalies and the detectors, so this shows they’re consistent, not real-world accuracy.
+- Decisions checked against SQL: at full scale still only 200 of 72,160 on the clean baseline and 200 of 72,360 on the final data. At starter I checked every one: all 1,418 on the clean baseline agree, and of the 1,438 on the final data only the 5 labelled ones differ.
+- Tests: all 708 pass, and all 20 new deliberate bugs are caught. I didn’t rerun the older deliberate-bug lists in full.
+Other seeds got worse, and I didn’t isolate why. I ran the same 40 seeds as before, at starter scale only:
+- Mostly different seeds fail now: only seeds 1, 15 and 16 also failed in the sweeps with the first truck change. That points to chance at this small size, but it’s not proven.
+- The default seed passes with little room: it has only 1 hold cancelled past the limit at starter scale.
+- One test changed because of this: test_different_seed_gives_different_data used seed 20261023, which the generator now refuses, so it uses 20261024 instead. The comment there says why.
+A separate bug showed up and is fixed. Asking for more cases than the targets leave room for made the order target negative, which inflated the row budget and overshot the total by one row. The generator would have stopped with an error rather than write wrong data, and now it refuses up front.
+
+Truck patterns that remain, at full scale. The strongest is trucks that left after the SKU’s last order and had no other truck of that SKU on the road for 5 days. That narrows 82,475 trucks to 2,468, of which 100 are cases, so about 4%. Road time used to pick out all 100 with no false hits.
+- Late TRANSFER_OUT: it still identifies all 50 anomalies and no other trucks, because that’s the anomaly itself, not a side effect.
+- Order cases unchanged: their patterns remain, such as being the last order on the SKU. You only asked me to fix the trucks.
+- Model warning: the warning against training a model on this data stays in STATUS.md.
+Things that remain simplified:
+- Every first ETA is at noon, for normal and case trucks alike.
+- 74% of case trucks are due in 3 days against 24% of normal ones, because cases go to warehouses more often.
+- No case truck misses its ETA, against 8.2% of normal ones.
+- inject.py: truck_times and try_transfer.
+- simulate.py: run_scheduled, for why it shuffles and then sorts.
+- check_unrelated.py: new_rows.
+- STATUS.md: Known problems.
+An interviewer may ask:
+- Why are decoys always early when other trucks aren’t?
+- Why shuffle and sort rather than just picking random times?
+- Why can’t the anomaly’s dispatch event move too?
+- Why did other seeds get worse, and does that matter?
+- What can someone still learn from the 2,468 trucks?
+Run these in PowerShell from the backend folder. The validate command on the final data should exit 1.
+.\venv\Scripts\python.exe -m scripts.generate --scale starter --seed 20261022
+.\venv\Scripts\python.exe -m eval.check_unrelated --scale starter
+.\venv\Scripts\python.exe -m scripts.load_data --scale starter --clean
+.\venv\Scripts\python.exe -m scripts.validate --scale starter --clean
+.\venv\Scripts\python.exe -m scripts.load_data --scale starter
+.\venv\Scripts\python.exe -m scripts.validate --scale starter
+.\venv\Scripts\python.exe -m eval.check_failures --scale starter
+.\venv\Scripts\python.exe -m eval.check_atp --scale starter
+.\venv\Scripts\python.exe -m scripts.run_detect
+.\venv\Scripts\python.exe -m eval.score --scale starter
+.\venv\Scripts\python.exe -m pytest
+For full scale, swap starter for full in the commands above, except pytest. Generating takes about 3 minutes, then:
+.\venv\Scripts\python.exe -m scripts.compare_runs --scale full
+To rerun the seed sweep, about 8 minutes per 20 seeds:
+.\venv\Scripts\python.exe -m eval.try_seeds --first 1 --count 20
+.\venv\Scripts\python.exe -m eval.try_seeds --first 20261023 --count 20
+Run these in PowerShell from E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge. I tested the add and commit on a throwaway clone: it commits exactly the 26 changed files, and the starter checksums still match. Line-ending warnings are harmless.
+git add backend docs prompt-history
+git status
+git commit -m "feat: give normal and injected trucks believable travel times and check unrelated records"
+git push
+The one-second truck pattern is gone, and totals, unrelated records, scores and same-seed runs all hold at both scales. All 708 tests pass. Other seeds got worse, 31 of 40 clean against 36 before. Your 26 changed files aren't committed yet.
+Do you approve Step 9, the API?

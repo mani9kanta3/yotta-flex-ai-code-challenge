@@ -1,0 +1,161 @@
+PS E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge\backend> .\venv\Scripts\python.exe -m scripts.generate --scale starter --seed 20261022
+scale=starter seed=20261022 out=E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge\backend\data\starter
+  product.csv                          91 rows  f7761eb1b7d8
+  sku.csv                             300 rows  33b4337ef995
+  location.csv                         12 rows  6163375f1990
+  channel.csv                           4 rows  25015ee94da7
+  channel_location.csv                 27 rows  46cd4f0ea42c
+  sku_location.csv                  1,521 rows  9c6268e91ad9
+  replenishment_rule.csv            1,521 rows  5757c6fd1cfc
+  inventory_balance.csv             3,042 rows  b73a8fb4ec37
+  shipment.csv                      3,106 rows  4cb9582ccae3
+  inventory_movement.csv           20,000 rows  777221fc10b9
+  shipment_event.csv                9,534 rows  937bc5dcbb40
+  counters: {'walk_in_refused': 759, 'reorders_skipped_no_budget': 0, 'transfers_short_of_stock': 186, 'transfers_late': 257, 'returns_good': 624, 'returns_damaged': 108, 'returns_refused': 0, 'top_up_sales': 35, 'top_up_receipts': 0, 'transfers_in_transit_at_end': 38, 'units_in_transit_at_end': 401}
+  NOT GENERATED YET: orders, order lines, reservations, allocations, customer shipments, returns of online orders, labelled anomalies, ground truth
+  took 0.7s
+PS E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge\backend> .\venv\Scripts\python.exe -m scripts.load_data --scale starter
+database inventory already exists
+ran schema.sql
+  loaded product                        91 rows  0.0s
+  loaded sku                           300 rows  0.1s
+  loaded location                       12 rows  0.0s
+  loaded channel                         4 rows  0.0s
+  loaded channel_location               27 rows  0.0s
+  loaded sku_location                1,521 rows  0.1s
+  loaded replenishment_rule          1,521 rows  0.0s
+  loaded inventory_balance           3,042 rows  0.1s
+  loaded shipment                    3,106 rows  0.1s
+  loaded inventory_movement         20,000 rows  0.4s
+  loaded shipment_event              9,534 rows  0.1s
+ran constraints.sql
+  foreign keys and indexes took 1.2s
+PS E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge\backend> .\venv\Scripts\python.exe -m scripts.validate --scale starter
+  PASS         0  table has rows: product
+  PASS         0  table has rows: sku
+  PASS         0  table has rows: location
+  PASS         0  table has rows: channel
+  PASS         0  table has rows: channel_location
+  PASS         0  table has rows: sku_location
+  PASS         0  table has rows: replenishment_rule
+  PASS         0  table has rows: inventory_balance
+  PASS         0  table has rows: shipment
+  PASS         0  table has rows: inventory_movement
+  PASS         0  table has rows: shipment_event
+  PASS         0  ledger has movements of type RECEIPT
+  PASS         0  ledger has movements of type SALE
+  PASS         0  ledger has movements of type RETURN
+  PASS         0  ledger has movements of type TRANSFER_OUT
+  PASS         0  ledger has movements of type TRANSFER_IN
+  PASS         0  ledger has movements of type ADJUSTMENT
+  PASS         0  ledger has movements of type BLOCK
+  PASS         0  ledger has movements of type UNBLOCK
+  PASS         0  ledger has movements of type WRITE_OFF
+  PASS         0  some transfers are still in transit at the end
+  PASS         0  some transfers missed their ETA
+  PASS         0  row count matches manifest: product
+  PASS         0  row count matches manifest: sku
+  PASS         0  row count matches manifest: location
+  PASS         0  row count matches manifest: channel
+  PASS         0  row count matches manifest: channel_location
+  PASS         0  row count matches manifest: sku_location
+  PASS         0  row count matches manifest: replenishment_rule
+  PASS         0  row count matches manifest: inventory_balance
+  PASS         0  row count matches manifest: shipment
+  PASS         0  row count matches manifest: inventory_movement
+  PASS         0  row count matches manifest: shipment_event
+  PASS         0  row count matches target: skus
+  PASS         0  row count matches target: locations
+  PASS         0  row count matches target: movements
+  PASS         0  movement_id format
+  PASS         0  sku_id format
+  PASS         0  location_id format
+  PASS         0  order_id format
+  PASS         0  reservation_id format
+  PASS         0  shipment_id format
+  PASS         0  sku without a valid product
+  PASS         0  movement without a stocked pair
+  PASS         0  stocked pair without an opening balance
+  PASS         0  stocked pair without a closing balance
+  PASS         0  balance snapshot at the wrong time
+  PASS         0  duplicate source doc on single-row movements
+  PASS         0  sale with a zero or positive quantity
+  PASS         0  BLOCK or UNBLOCK group that is not a matching pair
+  PASS         0  BLOCK or UNBLOCK that changes total stock
+  PASS         0  closing balance does not reconcile to opening plus ledger
+  PASS         0  stock below zero at any point in the ledger
+  PASS         0  movement before the pair went live
+  PASS         0  sale after a discontinued SKU stopped
+  PASS         0  movement outside the simulated period
+  PASS         0  movement ids not in time order
+  PASS         0  reservation with no event
+  PASS         0  reservation event with an illegal transition
+  PASS         0  reservation events that do not chain
+  PASS         0  reservation status differs from its latest event
+  PASS         0  order event with an illegal transition
+  PASS         0  order line event with an illegal transition
+  PASS         0  order status differs from its latest event
+  PASS         0  order line status differs from its latest event
+  PASS         0  order total differs from its lines
+  PASS         0  allocated line whose allocations do not add up to its quantity
+  PASS         0  allocation and its reservation disagree
+  PASS         0  inbound holds above what the shipment carries
+  PASS         0  order sale before its inbound truck arrived
+  PASS         0  consumed hold without a sale of the same quantity
+  PASS         0  shipment with no event
+  PASS         0  shipment event with an illegal transition
+  PASS         0  shipment events that do not chain
+  PASS         0  shipment status differs from its latest event
+  PASS         0  transfer without exactly one matching TRANSFER_OUT
+  PASS         0  received transfer without exactly one matching TRANSFER_IN
+  PASS         0  transfer still in transit with a TRANSFER_IN already posted
+  PASS         0  transfer movement that does not belong to its shipment
+  PASS         0  transfer received at or before it shipped
+  PASS         0  TRANSFER_IN time differs from the RECEIVED event
+  PASS         0  transfer units that left, arrived or stayed on the road do not add up
+  PASS         0  network stock plus in transit differs from opening plus outside changes
+  PASS         0  return not linked to a sale
+  PASS         0  return at a different SKU or location than its sale
+  PASS         0  return at or before its sale
+  PASS         0  returned more than was sold
+87 of 87 checks passed
+NOT GENERATED YET, so not covered by this run: orders, order lines, reservations, allocations, customer shipments, returns of online orders, labelled anomalies, ground truth
+PS E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge\backend> .\venv\Scripts\python.exe -m pytest
+........................................................................................................................................ [ 38%]
+........................................................................................................................................ [ 77%]
+.................................................................................                                                        [100%]
+353 passed in 108.96s (0:01:48)
+PS E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge\backend> .\venv\Scripts\python.exe -m pytest tests/test_transfers.py tests/test_returns.py -v
+============================================================= test session starts =============================================================
+platform win32 -- Python 3.12.3, pytest-8.3.4, pluggy-1.7.0
+rootdir: E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge\backend
+configfile: pytest.ini
+collected 71 items                                                                                                                             
+
+tests\test_transfers.py ...............................................                                                                  [ 66%]
+tests\test_returns.py ........................                                                                                           [100%]
+
+============================================================= 71 passed in 52.98s =============================================================
+PS E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge\backend> .\venv\Scripts\python.exe -m scripts.compare_runs --scale starter
+  product.csv                          91 /         91 rows  f7761eb1b7d8 / f7761eb1b7d8  same
+  sku.csv                             300 /        300 rows  33b4337ef995 / 33b4337ef995  same
+  location.csv                         12 /         12 rows  6163375f1990 / 6163375f1990  same
+  channel.csv                           4 /          4 rows  25015ee94da7 / 25015ee94da7  same
+  channel_location.csv                 27 /         27 rows  46cd4f0ea42c / 46cd4f0ea42c  same
+  sku_location.csv                  1,521 /      1,521 rows  9c6268e91ad9 / 9c6268e91ad9  same
+  replenishment_rule.csv            1,521 /      1,521 rows  5757c6fd1cfc / 5757c6fd1cfc  same
+  inventory_balance.csv             3,042 /      3,042 rows  b73a8fb4ec37 / b73a8fb4ec37  same
+  shipment.csv                      3,106 /      3,106 rows  4cb9582ccae3 / 4cb9582ccae3  same
+  inventory_movement.csv           20,000 /     20,000 rows  777221fc10b9 / 777221fc10b9  same
+  shipment_event.csv                9,534 /      9,534 rows  937bc5dcbb40 / 937bc5dcbb40  same
+reproducible: all 11 files identical
+PS E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge\backend> .\venv\Scripts\python.exe -m scripts.show_atp --sku SKU-000010 --channel WEB
+SKU-000010 on WEB at 2026-09-30 23:59:59
+location    type        on_hand blocked reserved inbound   atp safety buffer promisable
+LOC-000001  NDC              50       0        0       0    50      1      3         46
+LOC-000002  WAREHOUSE        20       0        0       0    20      1      3         16
+LOC-000003  WAREHOUSE        20       0        0       0    20      1      3         16
+LOC-000011  STORE             5       0        0       0     5      1      1          3
+network promisable: 81
+network on hand: 95, on the road: 0, total stock: 95
+PS E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge\backend> 

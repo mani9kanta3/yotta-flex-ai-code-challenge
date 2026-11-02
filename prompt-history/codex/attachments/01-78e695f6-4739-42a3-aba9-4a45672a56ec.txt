@@ -1,0 +1,169 @@
+What I checked first
+- Your laptop: Python 3.12.3, Node 24.19, Docker 29.2, a Ryzen 7 4800HS (16 threads), 15.4 GB RAM, SSD, 78 GB free on E:.
+- Postgres: the postgresql-x64-17 service is running, but I haven’t connected to it. psql isn’t on your PATH, which is fine because we’ll use psycopg2.
+- Style: I took “reference code” to mean your SQL Agent and Scholarship RAG projects. I’m copying these habits from them:
+  - backend/app, scripts, db, eval, tests, plus a Vite and Bootstrap frontend
+  - python -m scripts.x commands and one config.py
+  - raw SQL in capitalised constants, and plain functions
+  - pinned requirements, a pytest database marker that skips when Postgres is down, and feat: / fix: commit messages
+Two style differences from your old projects
+- Their docstrings are long and include first-person stories like “I found this the hard way”. Your new instruction says short comments, so I’ll follow that.
+- I won’t write stories about things that didn’t happen to you.
+A retailer sells the same stock through stores, warehouses and online channels. Each system has its own idea of how much is left, so it oversells. We build one trustworthy answer to “how many can I promise, to this channel, from this location, right now?” Every unit has to be traceable to an immutable ledger.
+
+What a reviewer will likely check:
+1. Do the scale and IDs match exactly?
+2. Are balances derived from movements, or just made up?
+3. Is history ever overwritten?
+4. Does ATP follow one written rule?
+5. Are the four anomalies labelled, separate from the data, and actually caught?
+6. Does the same seed give identical files?
+7. Do the numbers come from real runs?
+8. Can you explain it yourself?
+We’ll use this list in Phase 3.
+
+Objective
+Actors
+Workflow
+Entities
+IDs
+Generation steps
+Edge cases and acceptance criteria
+Evaluation focus
+Public data and deliverables
+Generator (plain Python)  ->  CSV files + ground_truth (kept apart) + manifest         | Load via COPY  ->  PostgreSQL  ->  Validator  ->  validation_summary                        |                   Detector (never sees ground truth)  ->  inventory_exception                        |                                       |                   FastAPI  ->  React page              eval/score.py compares with ground truth
+API and UI choice: FastAPI with raw SQL through psycopg2, and React with Bootstrap on one page. It’s the same setup as your SQL Agent project, so you can defend it. I’m not using Django because bulk COPY and heavy SQL gain little from an ORM.
+
+Libraries:
+- psycopg2-binary, fastapi, uvicorn, pydantic, python-dotenv, pytest, httpx (only for the API test client)
+- No pandas, numpy or Faker. The standard library’s random, csv and heapq are enough, and they’re easier to explain.
+Yotta Flex AI Challenge/ ├─ README.md, AI_USAGE.md, .gitignore ├─ docker-compose.yml          Postgres only, so reviewers need no local install ├─ prompt-history/             your prompts, saved by phase ├─ docs/ │  ├─ requirements_checklist.md   section 2, marked in Phase 3 │  ├─ data_dictionary.md          every field, for step 1 of the brief │  └─ rules.md                    every formula and assumption ├─ backend/ │  ├─ .env.example, requirements.txt, pytest.ini │  ├─ db/ │  │  ├─ schema.sql            tables, PKs, CHECKs, immutability triggers │  │  └─ constraints.sql       FKs and indexes, added after load for speed │  ├─ app/                     used at runtime │  │  ├─ config.py             settings from .env, fixed AS_OF time │  │  ├─ db.py                 connection helpers │  │  ├─ rules.py              pure functions: ATP, promisable, allocation, transitions │  │  ├─ atp.py                the same ATP rule in SQL, as of any time │  │  ├─ orders.py             place an order inside one transaction with a row lock │  │  ├─ expiry.py             writes EXPIRED events │  │  ├─ detect.py             the four detectors, SQL only │  │  ├─ trace.py              order > line > allocation > reservation > shipment > movement │  │  └─ main.py               the API │  ├─ generator/ │  │  ├─ settings.py           starter and full presets, ratios │  │  ├─ master.py             products, SKUs, locations, rules, opening balances │  │  ├─ simulate.py           the day-by-day event loop │  │  ├─ inject.py             labelled anomalies and decoys │  │  └─ export.py             numbering, CSV writing, closing balances, checksums │  ├─ scripts/ │  │  ├─ generate.py           the generator command │  │  ├─ setup_database.py     create database and tables │  │  ├─ load_data.py          COPY in parent-first order │  │  ├─ validate.py           all checks, writes the summary │  │  ├─ run_detect.py         runs the detectors │  │  ├─ compare_runs.py       two runs, same seed, compare │  │  └─ run_all.py            everything, one command │  ├─ eval/score.py            precision/recall, metrics.json │  ├─ tests/ │  └─ data/ │     ├─ starter/              committed, with ground_truth/ inside │     └─ full/                 gitignored, regenerated by command └─ frontend/src/               App, AtpPanel, OrderTrace, Exceptions, Metrics, api.js
+There are 18 tables: your 10 core entities plus 8 supporting ones, each with a reason below. IDs are readable text PKs, as the brief requires. Tradeoff: larger indexes than integers, but IDs match exactly across files and are easy to read.
+
+Master tables
+Ledger tables
+Order tables
+History and exceptions
+Design decisions you may be asked about
+- InventoryBalance isn’t a row we keep updating. That would overwrite history. It stores an OPENING and a CLOSING snapshot per SKU-location pair.
+- Three event tables, not one generic table. One shared table couldn’t have real FKs. Tradeoff: some repetition.
+- The status column is a cached copy of the latest event. The validator checks that they agree.
+- A transfer shipment carries one SKU. Tradeoff: real systems have shipment lines, but this avoids an extra table.
+- Ground truth isn’t in the database at all. SQL can’t accidentally read it.
+Cardinality
+Lifecycle states
+Product and SKU go ACTIVE > DISCONTINUED. A location’s lifecycle comes from its dates. Store closures are out of scope, and I’ll list that as a limitation.
+All of these go into docs/rules.md. Here t is any point in time. Data covers 1 Jan to 30 Sep 2026, and “now” is a fixed AS_OF, never the real clock, so results repeat.
+
+Movement types and signs
+Formulas
+on_hand(t)  = opening_on_hand + SUM(quantity, all rows up to t) blocked(t)  = opening_blocked + SUM(quantity, BLOCKED rows up to t) sellable(t) = on_hand(t) - blocked(t)  reserved(t) = SUM(qty) for reservations where               status is not REJECTED               AND created_at <= t               AND (ended_at is null OR t < ended_at)               AND (t < expires_at OR confirmed_at <= t)  inbound(t)  = SUM(transfer_qty) for TRANSFER shipments to this location where               shipped_at <= t               AND (received_at is null OR t < received_at)               AND eta_at <= t + 24 hours               AND the rule active at t has allow_inbound_atp = true  ATP(t)         = on_hand - reserved - blocked + inbound       (the brief's formula) promisable(t)  = max(0, ATP - safety_stock - channel_buffer)  (what we actually sell) network(sku, channel, t) = SUM(promisable) across eligible locations
+The brief’s formula doesn’t mention safety stock or buffers, but the objective does. So I kept its ATP as written and added promisable on top. Both are shown side by side.
+
+Channel policy
+Worked example: on_hand 100, blocked 5, reserved 12, qualifying inbound 20, safety 10.
+- ATP = 100 − 12 − 5 + 20 = 103
+- WEB (buffer 3) = 103 − 10 − 3 = 90
+- MARKETPLACE (buffer 5, no inbound) = 83 − 10 − 5 = 68
+- STORE = 100 − 12 − 5 = 83
+Reservation expiry
+- The hold covers [created_at, expires_at). At exactly expires_at the stock is already released.
+- ATP depends on the time, not on whether a job ran, so a late job can’t wrongly lock stock. The job only records the EXPIRED event.
+- Expiry creates no movement, because nothing physically moved.
+- On shipping, the reservation ends and the SALE posts at the same moment, so ATP doesn’t change and nothing is counted twice.
+Safety stock and replenishment
+forecast_daily = from SKU popularity and location size (a generator planning value) safety_stock   = max(1, ceil(forecast_daily × 3)) reorder_point  = safety_stock + ceil(forecast_daily × lead_time_days) reorder_qty    = max(minimum batch, ceil(forecast_daily × 14)) position       = on_hand - blocked - reserved + all in-transit to this location
+- If position <= reorder_point, stock is requested from the parent location.
+- Lead times: store from warehouse 2 days, warehouse from NDC 3 days, NDC from supplier 7 days (as a RECEIPT).
+In-transit transfers
+1. TRANSFER_OUT posts at shipped_at, reducing stock at the source.
+2. The stock is then at neither location. It shows up only through the shipment.
+3. TRANSFER_IN posts at received_at, adding stock at the destination.
+4. Conservation check: network on_hand + in_transit = opening + receipts − sales + returns ± adjustments − write-offs.
+Allocation and overselling
+1. Find eligible locations for the channel at t that stock the SKU.
+2. Rank them: same region first, then warehouse before store, then most promisable, then lowest ID. Ranking is fixed, so results repeat.
+3. If one location can cover the line, allocate there.
+4. Otherwise split across at most 2 locations.
+5. Otherwise reject the line, with a REJECTED reservation and decision row kept as evidence. No partial quantity is allocated on a line. Tradeoff: simpler, but a customer asking for 5 when 4 exist gets none.
+6. If every line is rejected, the order is REJECTED. If only some are, the order continues with the rest.
+Short pick (the natural exception path): if damage reduces stock after a hold, shipping retries and then cancels with reason SHORT_PICK.
+
+The four anomalies. Each is self-contained and passes FK checks. Each is only wrong in business terms.
+Injections are placed only where the replay shows later stock stays valid, so unrelated rows aren’t damaged.
+
+Other assumptions
+- Whole units only; no decimal quantities.
+- One currency, INR.
+- customer_ref is an opaque code, with no personal data and no customer table.
+- Suppliers appear only as source_doc on RECEIPT rows, with no PO table.
+- Returns go back to the original location.
+- Walk-in sales respect reservations. Real tills may not, and I’ll list that as a limitation.
+The catch: 50,000 orders produce only about 110,000 sales. If every sale needed an order, the data would be mostly transfers, which isn’t realistic.
+
+So most sales are walk-in store sales with no order (allocation_id is null, source_doc is POS-...). This is the optional relationship, and it’s how retail actually works.
+
+Target mix. These are estimates. Real numbers will replace them after the first full run.
+How it stays fast
+- No database during generation. State lives in Python dictionaries keyed by SKU and location.
+- A heapq queue holds future events like expiry, arrival, return. I’ll teach this before writing it.
+- Rows are written to CSV, then loaded with COPY, which is far faster than inserts. FKs and indexes are added after the load.
+- It’s single-process, because parallel runs make determinism hard.
+- If it’s slow, we run cProfile and fix the real cause.
+My estimate, not measured: generate plus load in under 10 minutes, about 100 MB for the movements CSV, and under 1 GB of memory. I’ll report the real figures.
+
+Hitting the exact total: walk-in sales fill whatever budget remains each day, and the last day tops up to exactly the target. Baseline targets are reduced by the planned injected rows, so totals including anomalies are exactly 1,000,000 and 50,000.
+
+Scale
+python -m scripts.generate --scale starter --seed 20261022 python -m scripts.generate --scale full --seed 20261022
+Overrides such as --movements also work. Everything else is a ratio, so both scales run the same code.
+
+Determinism rules
+- One seeded random generator.
+- Never loop over sets, and never read the clock.
+- Fixed line endings.
+- Money written as exact decimals.
+- No timestamp inside the checksummed manifest.
+- The Python version is recorded, since random is only guaranteed on the same version.
+Realistic shape: Zipf-style SKU popularity, larger and smaller stores, weekday and weekend patterns, an end-of-season sale spike, and returns that differ by category. Locations are 1 NDC, 9 warehouses and 90 stores across 5 regions.
+Outcomes come from rules. Nothing does random.choice(["EXPIRED", "CONFIRMED"]).
+- Randomness only decides inputs, such as “did this customer pay, and when”.
+- The status then follows from the rule. For example, no payment before expires_at means EXPIRED.
+- The same applies to rejections, short picks, totals and balances.
+ground_truth.csv contains
+- Injected anomalies, with expected value, actual value and expected decision.
+- Decoys, which look suspicious but are valid. Without them, precision would be meaningless.
+  - A reservation exactly equal to promisable
+  - A sale from SELLABLE at a location that also holds blocked stock
+  - A transfer received 1 second after shipping
+  - A pair whose movements net to zero
+- Oversell attempts, with their expected rejection.
+- ATP checkpoints: the simulator’s running answer at sampled times, compared with the separate SQL calculation.
+How leaks are prevented
+- It’s stored in a separate folder and is never loaded into Postgres.
+- app/ never reads it, and only eval/score.py does. A test fails if the string ground_truth appears in app/.
+- No issue_type column exists on any input table.
+- IDs could leak too. If injected rows got the last IDs, a high ID would give them away. So orders and movements are numbered only after injection, sorted by time.
+- Reason codes on injected rows look completely normal.
+Honest limit: you write both the anomalies and the detectors, so 100% recall proves consistency rather than real-world accuracy. The README will say so. ATP checkpoints are stronger evidence, because two separate implementations must agree.
+Metrics, all measured from real runs
+- Reconciliation: percentage of pairs that reconcile, and whether mismatches equal the labelled count.
+- ATP: checkpoint match rate between SQL and the simulator.
+- Decisions: single, split and rejected rates, oversell attempts blocked, short picks, expiry rate, units released.
+- Traceability: percentage of allocations with a location, and of shipped allocations with a SALE.
+- Detection: precision, recall and F1 per issue, with false positives on decoys.
+- Data shape: movement mix, channel mix, top SKU concentration.
+- Performance: generate time, load time, ATP query p50 and p95.
+- Reproducibility: checksums match or don’t.
+Time reality: you asked me to plan across your remaining time, and it’s 34 hours 19 minutes, not 72. I’m setting our own code freeze for Sunday 10 PM, leaving 3 hours spare.
+That’s about 18.5 hours of work, including your review time.
+
+What to cut first if we run late, in order
+1. React UI, leaving FastAPI’s /docs plus the metrics file. The brief doesn’t explicitly require a UI.
+2. docker-compose.yml.
+3. Live POST /api/orders and the race test, keeping the tested rule and expiry.
+4. Mid-period rule and buffer version rows, leaving one version with effective dates.
+5. SKU launches and discontinuations mid-period.
+Never cut: full-scale generation, the four anomalies, ground truth, validation, the reproducibility check, tests, README, prompt history.
+Risks
+Unclear points, and my default for each

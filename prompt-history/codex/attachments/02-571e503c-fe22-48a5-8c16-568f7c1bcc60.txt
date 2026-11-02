@@ -1,0 +1,140 @@
+The missing sections, the four fixes and the first small run are all done. Only the ledger part is built so far. Reservations, inbound promises and locking below are the agreed design, with no code yet.
+
+My last message did include those tables, but they clearly didn’t reach you. So they’re now in files, and I’ve used plain lists here:
+- docs/brief.md: the full brief, word for word
+- docs/PLAN.md: the complete corrected plan, with a section checking it against the brief
+- docs/requirements_checklist.md: 112 numbered items
+Entities (19 tables)
+- The 10 from the brief: product, sku, location, inventory_balance, inventory_movement, reservation, orders, order_line, shipment, replenishment_rule
+- Bridge tables: sku_location, channel_location, order_allocation
+- Supporting tables: channel, allocation_decision, order_event, reservation_event, shipment_event, inventory_exception
+IDs
+- From the brief:
+  - SKU-000001
+  - LOC-000001
+  - ORD-2026-000001
+  - RES-ORD-2026-000001-01
+  - MOV-2026-00000001
+  - SHP-2026-000001
+- Ours, same pattern:
+  - PRD-000001
+  - ORD-2026-000001-L01
+  - ALC-2026-0000001
+  - DEC-2026-0000001
+  - BAL-0000001
+  - RUL-0000001
+  - CHL-000001
+  - EXC-000001
+Relationships
+- 1:N:
+  - product to SKU
+  - parent location to child locations (the NDC, the national warehouse, has no parent)
+  - order to lines
+  - reservation to its events
+- N:M through a bridge table:
+  - SKU to location
+  - channel to location
+  - order line to location
+- Optional:
+  - A walk-in sale has no allocation.
+  - A STORE allocation has no reservation or shipment.
+  - A rejected request has no allocation.
+  - A transfer has no order.
+  - A customer shipment has no destination location.
+Lifecycle states
+- Order: PLACED > ALLOCATED or REJECTED; ALLOCATED > CONFIRMED or CANCELLED; CONFIRMED > FULFILLED or CANCELLED
+- Order line: PENDING > ALLOCATED or REJECTED; ALLOCATED > SHIPPED or CANCELLED
+- Reservation: starts ACTIVE or REJECTED; ACTIVE > CONFIRMED, EXPIRED or CANCELLED; CONFIRMED > CONSUMED or CANCELLED, or CONFIRMED again for a new promised date
+- Shipment: CREATED > IN_TRANSIT or CANCELLED; IN_TRANSIT > DELIVERED or RECEIVED, or IN_TRANSIT again for a new ETA
+Scale
+- starter: 300 SKUs, 12 locations, 20,000 movements, 1,000 orders, 5 anomalies per type
+- full: 5,000 SKUs, 100 locations, 1,000,000 movements, 50,000 orders, 50 anomalies per type
+The four anomalies. Each passes every foreign key, and only its business meaning is wrong.
+1. BALANCE_NOT_RECONCILED: one stored CLOSING value is changed. It’s detected because stored differs from opening plus ledger.
+2. RESERVATION_EXCEEDS_AVAILABLE: a new order holds more than was available, and its decision log shows a stale ATP. It’s detected by recalculating at that time without trusting the log.
+3. FULFILLED_FROM_BLOCKED: a new order’s SALE draws from the BLOCKED bucket. It’s detected from the SALE row itself.
+4. TRANSFER_DOUBLE_COUNTED: a new transfer’s TRANSFER_IN is timed before its TRANSFER_OUT. It’s detected by comparing the two rows on the same shipment.
+Each type also gets valid decoy rows that look suspicious. Flagging one counts as a false positive.
+1. Reservations at a past time
+
+The reservation row now stores only fixed facts. To find its state at time t, take the latest event at or before t. It holds stock if that state is CONFIRMED, or if it’s ACTIVE and t is before expires_at.
+
+Example: 5 units expiring at 10:30, confirmed at 10:20, cancelled at 11:00.
+- At 09:59: holds 0 (it doesn’t exist yet)
+- At 10:10: holds 5
+- At 10:45: holds 5 (confirmed, so expiry no longer applies)
+- At 11:00: holds 0
+If it was never confirmed, it holds 5 at 10:29 and 0 at 10:30, even if the expiry job runs late.
+
+2. Damage without increasing total stock
+
+on_hand is sellable plus blocked. A BLOCK always writes two rows: −3 SELLABLE and +3 BLOCKED. They add to zero, so sellable 95 and blocked 5 becomes 92 and 8, and on-hand stays 100. ATP still falls by 3. Only a WRITE_OFF lowers total stock.
+
+One function writes both rows together, and the validator rejects any group that isn’t a matching pair.
+
+3. Orders using incoming stock
+- A reservation is either all ON_HAND or all INBOUND, and an INBOUND one names one shipment.
+- promised_ship_by is the ETA plus 24 hours.
+- It can’t ship until that shipment is RECEIVED. Arrival triggers shipping, oldest reservation first.
+- If the ETA passes:
+  1. The shipment gets a new ETA event.
+  2. The reservation tries another location with stock.
+  3. If there’s none, it gets a new promised date, and the first promise stays in history.
+  4. Past 3 days late, it’s cancelled and the hold is released.
+4. Which rows are locked
+
+The lock is on sku_location, one row per stocked SKU at a location.
+1. Begin a transaction at READ COMMITTED.
+2. Find the candidate pairs from master data only, reading no stock numbers.
+3. Remove duplicates and sort by sku_id, then location_id.
+4. Run SELECT ... ORDER BY sku_id, location_id FOR UPDATE.
+5. Only then recalculate availability, in new statements.
+6. Write everything and commit.
+The second order waits at step 4, then sees the first order’s reservation at step 5 and is refused. The fixed sort order prevents deadlocks. If a lock waits over 5 seconds, it rolls back and returns 503.
+Every walk-in sale passes qty <= sellable - reserved, or it’s refused and no row is written. Rows already promised are held out of the budget, so optional events can’t use them up.
+
+The final top-up uses the same check. If sales keep being refused, it posts a real warehouse delivery instead. If that also can’t reach the target, the run stops with an error.
+Tests: 50 passed, 0 skipped.
+
+Full run on seed 20261022:
+sku.csv                    5,000 rows location.csv                 100 rows inventory_balance.csv    153,050 rows inventory_movement.csv 1,000,000 rows counters: walk_in_refused 62,801, top_up_sales 84, top_up_receipts 0
+- Time: generate took 29.3s, the movement COPY 8.8s, FKs and indexes 11.9s, and validation 15s.
+- Validation: 15 of 15 checks passed, including stock never going below zero at any point.
+- Reproducibility: two runs gave all 9 files identical, at both starter and full scale.
+A real bug the schema caught: a SKU discontinued before a late store opened was still being stocked there. A date check refused the load, and I fixed the generator.
+
+Not built or proven yet
+- There are no orders, reservations, shipments, transfers, returns or anomalies yet. Only receipts, walk-in sales, damage and adjustments exist. The reservation check on sales is tested only with a hand-set value.
+- Stores currently get direct deliveries. Transfers replace these later.
+- The mix isn’t final: 87.6% of rows are walk-in sales, against a target of about 69%.
+- The data dictionary and race test aren’t written yet.
+The Docker database currently holds the full dataset. I also started Docker Desktop to run it, and used port 5434 because your aivoa-round-one-db-1 container holds 5433. I left that container alone.
+- schema.sql: why the movement CHECK allows a SALE from BLOCKED (so the labelled anomaly can load).
+- simulate.py: sell_walk_in, block, free_rows and top_up.
+- validate.py: RUNNING_STOCK, a window function that replays stock row by row.
+- test_database.py: the tests that break data on purpose.
+An interviewer may ask
+- Why are foreign keys added after loading?
+- Why does a BLOCK need two rows?
+- What stops an UPDATE on the ledger?
+- Why are the sellable and blocked counts calculated twice?
+- What happens if stock runs out on the last day?
+Run these from E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge:
+docker compose up -d --wait
+Then run these from the backend folder of that project:
+.\venv\Scripts\python.exe -m pytest
+.\venv\Scripts\python.exe -m scripts.generate --scale starter --seed 20261022
+.\venv\Scripts\python.exe -m scripts.load_data --scale starter
+.\venv\Scripts\python.exe -m scripts.validate --scale starter
+Run these from E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge. I’ve run nothing that changes your folder, and I checked the file list with a dry run: no .env, venv or data files are included. The starter data is left out for now because it will change, and it gets committed once final.
+git init
+git branch -M main
+git add .gitignore docker-compose.yml docs prompt-history backend/.env.example backend/requirements.txt backend/pytest.ini backend/app backend/db backend/generator backend/scripts backend/tests
+git status
+git commit -m "feat: add schema, docker setup and stock-checked ledger generator"
+To push, first create an empty public repo on GitHub, then put your own username and repo name in:
+git remote add origin https://github.com/<your-username>/<repo-name>.git
+git push -u origin main
+Plan fixes are in docs/PLAN.md, and the schema and ledger generator work: exactly 1,000,000 rows, 15 of 15 checks, identical repeat runs. Orders, reservations, inbound promises and locking are designed but not built, and nothing is committed.
+
+Do you approve Step 2: reservations from events, ATP and allocation rules?

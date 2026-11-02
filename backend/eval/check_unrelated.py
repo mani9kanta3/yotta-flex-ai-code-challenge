@@ -50,6 +50,10 @@ SHIPMENT_FIELDS = ["shipment_type", "status", "from_location_id", "to_location_i
 MOVEMENT_FIELDS = ["sku_id", "location_id", "movement_type", "stock_bucket", "quantity", "occurred_at",
                    "reason_code", "movement_group_id"]
 
+# The other columns of a balance. Its SKU, location and type are how the two rows are paired up.
+BALANCE_IDENTITY = ["balance_id", "as_of_at"]
+BALANCE_STOCK = ["on_hand", "blocked"]
+
 
 def read_rows(folder, table):
     with open(folder / f"{table}.csv", encoding="utf-8", newline="") as file:
@@ -183,21 +187,31 @@ def compare_table(table, clean_rows, final_rows, maps, belongs_to_a_case):
 
 
 def compare_balances(clean_dir, final_dir, case_skus):
-    """Same IDs in both. Opening rows can't change, and a closing row only on a SKU with a case."""
-    def by_pair(folder):
-        return {(row["sku_id"], row["location_id"], row["snapshot_type"]): (row["balance_id"], row["on_hand"], row["blocked"])
-                for row in read_rows(folder, "inventory_balance")}
-    clean = by_pair(clean_dir)
-    final = by_pair(final_dir)
+    """Every balance keeps its ID and date. Opening stock can't change, and closing stock only on a SKU with a case."""
+    def by_pair(rows):
+        return {(row["sku_id"], row["location_id"], row["snapshot_type"]): row for row in rows}
+    clean_rows = read_rows(clean_dir, "inventory_balance")
+    final_rows = read_rows(final_dir, "inventory_balance")
+    clean = by_pair(clean_rows)
+    final = by_pair(final_rows)
 
     problems = []
+    # Looking rows up by pair keeps only the last of any repeats, so count them first.
+    for name, rows, pairs in (("clean", clean_rows, clean), ("final", final_rows, final)):
+        if len(rows) != len(pairs):
+            problems.append(f"the {name} data has {len(rows) - len(pairs)} repeated balance rows")
     one_sided = set(clean) ^ set(final)
     if one_sided:
         problems.append(f"{len(one_sided)} balance rows are only in one of the two datasets")
     both = set(clean) & set(final)
-    if any(clean[key] != final[key] for key in both if key[2] == "OPENING"):
+    moved = [key for key in both if fields_of(clean[key], BALANCE_IDENTITY) != fields_of(final[key], BALANCE_IDENTITY)]
+    print(f"  {'balance dates and IDs':20} {len(moved):>6} changed")
+    if moved:
+        problems.append(f"{len(moved)} balances changed their date or ID")
+    stock_differs = {key for key in both if fields_of(clean[key], BALANCE_STOCK) != fields_of(final[key], BALANCE_STOCK)}
+    if any(key[2] == "OPENING" for key in stock_differs):
         problems.append("opening balances differ")
-    changed = [key for key in both if key[2] == "CLOSING" and clean[key] != final[key]]
+    changed = [key for key in stock_differs if key[2] == "CLOSING"]
     outside = [key for key in changed if key[0] not in case_skus]
     print(f"  {'closing balances':20} {len(changed):>6} changed  {len(outside):>6} on a SKU with no case")
     if outside:

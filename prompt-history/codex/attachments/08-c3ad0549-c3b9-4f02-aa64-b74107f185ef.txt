@@ -1,0 +1,61 @@
+All of it is done and tested at both scales, and all 689 tests pass. Seven files still need committing.
+
+Your commit d797b68 went in at 11:56 while I was still working, and it’s already pushed. It holds Steps 4 and 5 plus most of this work, so you don’t need the split or any snapshot commands. I deleted .step4_snapshot, and only the seven files are left (commands below). Please don’t amend or force-push.
+The validator now lists the failing IDs for the five labelled checks, and check_failures compares them with the labelled IDs. These now count as unexpected, and the command exits 1:
+- a missed label and an unrelated failure, even when the count still matches
+- a flagged decoy
+- a check that reports no IDs, a blank ID, a repeated ID, or fewer IDs than violations
+- a labelled row with no ID, or a check with nothing labelled
+- any required check missing from the summary, including the decision sample
+This also fixed a real bug: a failing decision sample with an empty ID list used to count as expected.
+On the final data check_failures exits 0. The total rose from 127 checks because the validator now also counts duplicate keys, broken references, disallowed values, date order and file checksums.
+
+Only 200 decisions were checked against SQL at full scale: 200 of 72,139 on the clean baseline and 200 of 72,339 on the final data. The validator now prints this and writes it to the summary.
+Each checkpoint looks at one second before an event and the second it happens. Plain Python works out the answer from the generator’s own lists, and it has to match app/atp.py in SQL.
+- Truck arrivals: ATP stayed the same at all 25 full-scale arrivals, so stock isn’t counted at both ends.
+- ATP can go negative: the lowest was -274, with a paid hold waiting on an overdue truck. promisable stays at 0, so nothing can be promised from it.
+- Limit: this is a small sample, and I wrote both calculations from the same formula, so they would share a misunderstanding of the rule.
+Other seeds: I ran 40 at starter scale, and 36 had no problem. Only the default seed has run at full scale.
+Anomaly pattern, measured at full scale:
+The road time alone reveals all 100 transfer cases, though it can’t tell anomalies from decoys. The detectors don’t use it, so their scores aren’t inflated. Anyone training a model on this data would get a misleading score, though, and STATUS.md warns against that.
+- Dictionary: DATA_DICTIONARY.md covers all 19 tables, every field the brief asks about, relationships, lifecycles, reason codes and the files that aren’t loaded. A test compares it with the real database, so it can’t drift unnoticed.
+- Fixed in the manifest review:
+  - File checksums were never compared, so a changed file with the same row count would have passed.
+  - The summary didn’t say which data it covered.
+  - The checkpoints had no checksum.
+- Left as they are, with reasons in STATUS.md: python_version stays in the manifest, and no code version is recorded. Failing IDs stay in the validation summary because they come from SQL, not the labels.
+- Still open for Step 11: the brief says “CSV/JSON/SQL”, and we only export CSV, plus JSON for the manifest and reports.
+- Same seed twice: all 40 files are identical at both scales, including the checkpoints. The ground truth checksum changed because of its new sku_id column. The movement checksums didn’t change.
+- Detection: precision and recall are still 1.0 for all four types, with no decoys flagged. I wrote both the anomalies and the detectors, so this shows they’re consistent, not real-world accuracy.
+- Deliberate bugs: 55 of 60 were caught first time. I added tests for four of the misses, and an existing test in test_orders.py already caught the fifth, so all 60 are now caught. I didn’t rerun the earlier 92 in full.
+- check_failures.py: compare_with_labels and classify.
+- checkpoints.py: answer_at, which writes the formula out on purpose.
+- validate.py: RECORD_CHECKS and required_check_names.
+An interviewer may ask:
+- Why isn’t a matching count enough?
+- Why does the network check compare SKUs and not balance IDs?
+- Why write the ATP formula a second time?
+- Why leave failing seeds failing?
+- What could someone learn from the one-second trucks?
+Run these in PowerShell from the backend folder. The validate command on the final data should exit 1.
+.\venv\Scripts\python.exe -m scripts.generate --scale starter --seed 20261022
+.\venv\Scripts\python.exe -m scripts.load_data --scale starter --clean
+.\venv\Scripts\python.exe -m scripts.validate --scale starter --clean
+.\venv\Scripts\python.exe -m scripts.load_data --scale starter
+.\venv\Scripts\python.exe -m scripts.validate --scale starter
+.\venv\Scripts\python.exe -m eval.check_failures --scale starter
+.\venv\Scripts\python.exe -m eval.check_atp --scale starter
+.\venv\Scripts\python.exe -m scripts.run_detect
+.\venv\Scripts\python.exe -m eval.score --scale starter
+These take longer: about 9 minutes for all tests and 5 for the full comparison.
+.\venv\Scripts\python.exe -m pytest
+.\venv\Scripts\python.exe -m scripts.compare_runs --scale full
+To rerun the seed sweep, which took me about 8 minutes for 20 seeds:
+.\venv\Scripts\python.exe -m eval.try_seeds --first 20261023 --count 20
+Run these in PowerShell from E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge. I tested the add and commit on a throwaway clone, and it picks up exactly the seven files. Line-ending warnings are harmless.
+git add backend docs
+git status
+git commit -m "test: close test gaps and document seed failures and the anomaly pattern" -m "Commit d797b68 also holds Step 4, the ID comparison, the ATP checkpoints and the data dictionary."
+git push
+check_failures now compares record IDs, ATP checkpoints and the data dictionary are in, and seed failures and the anomaly pattern are documented. All 689 tests pass. Seven files still need your commit; nothing is committed by me.
+Should Step 7 also remove the one-second truck pattern?

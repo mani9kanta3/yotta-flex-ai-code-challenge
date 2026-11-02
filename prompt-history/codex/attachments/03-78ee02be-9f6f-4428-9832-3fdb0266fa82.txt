@@ -1,0 +1,50 @@
+The validator fixes are done, and reservations, ATP and allocation work for online orders through function calls and tests. Those orders aren’t in the generated data yet, and they can’t ship yet. The exact list of what’s unfinished is in docs/STATUS.md.
+The negative sale was a real bug. -3 <= available passed the old rule, so it would have written a SALE that added stock.
+
+Checking your starter load against the full targets now fails correctly:
+43 of 54 checks passed EXIT CODE: 1
+- Historical states: a reservation’s state at a past time comes only from its events, including confirmation, cancellation and expiry.
+- ATP: the same formula runs in SQL for any point in time, with safety stock, channel buffers and approved inbound.
+- Allocation: one location, then two locations, then one inbound truck, then reject.
+- Last unit: orders lock the sorted sku_location rows, then recalculate stock after the lock.
+The three tests you asked for
+- Expiry at the exact time: a hold counts at 10:29:59 and is released at 10:30:00, before the expiry job runs. Confirming is refused at 10:30:00, and a new order can take the stock at that moment.
+- Historical states: cancelling an order later doesn’t change what an earlier time reports. Python and SQL also agree one second either side of each change.
+- Two orders, last unit: exactly one wins. I also tested 20 orders for 1 unit and 20 orders for 7 units.
+  - Without relying on timing: one test makes the second order wait at the lock, commits the first, then confirms the second is refused.
+One gap I found and fixed: an order stamped a second before an already-committed hold could look back to before that hold existed and take the same stock. An order’s time now moves up to the latest event on the rows it locked.
+194 passed in 45.98s
+- Race tests: passed on 5 repeat runs in a row.
+- Starter and full data: both pass 54 of 54 checks with exit code 0. Movements are still exactly 1,000,000, and their checksum didn’t change.
+- Same-seed check on starter: all 9 files are identical. I didn’t repeat the two-run comparison at full scale this time, but the movement checksum matches the last full run.
+- Do the tests actually catch bugs? I put 14 bugs into a scratch copy, one at a time, and all 14 were caught. They included removing the lock, reading stock before the lock, off-by-one expiry and always exiting 0. Your code wasn’t changed by this.
+A slow query I found: ATP for the most-stocked SKU (40 locations) took 881 ms at full scale, and an order holds its locks for about that long. The loader never ran ANALYZE, and adding it brought this down to about 300 ms. I haven’t load-tested orders at full scale.
+- STORE orders: they raise NotImplementedError.
+- Generated orders: the generator makes none, so the order checks in the validator only see orders placed in tests. The validator and generator both print a NOT GENERATED YET line.
+- Shipping: nothing ships yet, so waiting for a truck to arrive isn’t enforced. Holds and promised dates are recorded, but late-arrival handling isn’t written.
+- Later steps: transfers, returns, anomalies, ground truth, data dictionary, detectors, API and UI don’t exist yet.
+- orders.py: the order of steps in place_order_in_transaction, plus lock_pairs and decision_time.
+- atp.py: RESERVED_SQL, especially the JOIN LATERAL, which finds the latest event up to a time.
+- reservations.py: why expire_due dates the event at expires_at rather than when the job ran.
+- validate.py: check_tables_not_empty, and why rule checks alone pass on empty tables.
+An interviewer may ask
+- Why can’t you read stock before taking the lock?
+- Why READ COMMITTED and not REPEATABLE READ here?
+- What happens if the expiry job is three hours late?
+- Why does a rejected request still get a reservation row?
+- Why is the lock on sku_location and not on the balance?
+Run these from the backend folder. Your database currently holds the starter data.
+.\venv\Scripts\python.exe -m pytest
+.\venv\Scripts\python.exe -m pytest tests/test_orders.py -v -k "last_unit or waits or expiry or history"
+.\venv\Scripts\python.exe -m scripts.validate --scale starter
+.\venv\Scripts\python.exe -m scripts.show_atp --sku SKU-000010 --channel WEB
+The schema changed, so reload once if you’re on an older copy:
+.\venv\Scripts\python.exe -m scripts.load_data --scale starter
+Run these from E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge. A dry run showed only the expected code and docs, with no data files. I’ve committed nothing.
+git add docs prompt-history backend/app backend/db backend/generator backend/scripts backend/tests
+git status
+git commit -m "feat: add reservations, atp and locked allocation, and harden validator"
+git push
+The validator now fails on missing balances, empty data and wrong counts, and exits 1. Online reservations, ATP and allocation work in code and tests. Generated orders, shipping, late inbound and STORE orders are not built, and nothing is committed.
+
+Do you approve Step 3: transfers and returns?

@@ -1,0 +1,53 @@
+Transfers and returns now work in both the live code and the generated data, and orders using inbound stock wait for the truck. Generated data still has no online orders, and a late truck only leaves its order waiting. The full list is in docs/STATUS.md.
+A test ships 4 units from a stock of 10 and checks these numbers:
+The TRANSFER_IN row and the RECEIVED event share one timestamp and one transaction, so a truck is never inbound and on the shelf at the same moment. The validator also checks that those two times match.
+- Late trucks: a truck past its ETA stops counting as inbound, but its stock still counts in the total.
+- Receiving: a truck can’t be received twice, or at or before the time it shipped.
+- Shipping from a source: a truck can’t take stock that’s blocked or held for an order.
+Waiting can’t be tested without shipping, so I built a small shipping.py earlier than planned.
+- Before arrival: shipping is refused with no sale written, and the hold stays in place.
+- Timing: an order is refused at 17:59:59 and ships at 18:00:00, the exact second the truck arrives.
+- After arrival: paid orders ship oldest first, and the next order can’t take stock already promised to them.
+- Must link to a real sale: the database refuses a return that names no sale or a sale that doesn’t exist. The code and validator refuse a link to anything that isn’t a sale.
+- Limit: a sale can come back in parts, but never more than was sold. With 20 returns racing for 3 units, exactly 3 were accepted.
+- Damaged items: these raise on-hand stock but not ATP.
+At full scale:
+- Movements: exactly 1,000,000, with a new checksum of 8cc7dcabdc6f.
+- Trucks: 1,004 are still on the road at the end, carrying 25,104 units, and 92.2% of received trucks arrived by their first ETA.
+- Returns: 2,021 sales came back in two parts, and no return was refused.
+- Tiny datasets: daily damage and adjustment counts rounded down to zero, so that data had none. The new check for missing movement types caught it, and fractions now carry over to the next day.
+- One bug check wasn’t valid: my deliberate bug had a syntax error, so it “failed” for the wrong reason. Redone properly, two tests catch it.
+- Failing race tests could hang the suite: a failed test left a transaction open that blocked the next test’s setup. conftest.py now closes leftover connections first.
+- No heapq: the plan had an event queue, but a dict of what’s due each day is simpler and does the job.
+- Whole orders ship together: one line on a truck holds up the rest of the order. It’s simpler and ships fewer parcels, but the customer can wait longer.
+- Renamed: OrderBusy is now StockBusy, because transfers and returns raise it too.
+- Late trucks: the order waits with its old promised date. Re-promising, moving to another location and the 3-day cancellation come in Step 4.
+- Generated returns: these cover walk-in sales only, because no online orders are generated yet.
+- Not built yet: customer shipments stop at IN_TRANSIT, and there’s no return window.
+- Speed: ATP for the SKU with the most trucks takes about 430 ms, up from about 300 ms for the most-stocked SKU in Step 2. An order holds its locks about that long per line, and orders haven’t been load-tested at full scale.
+- Movement mix: this will shift once orders exist. Sales are 72.7% and transfer rows 16.5%, against the plan’s estimates of about 80% and 9%.
+- transfers.py: the order of steps in ship_transfer_in_transaction, and why receive_transfer_in_transaction checks the time before moving it forward.
+- shipping.py: check_trucks_have_arrived.
+- returns.py: why the count happens after the lock.
+- simulate.py: order_from_source, and how a refused sale asks for stock again.
+An interviewer may ask
+- Where is a unit while it’s on the truck, and which number counts it?
+- Why can inbound drop to zero while the stock is still on the road?
+- Why doesn’t ATP change when a truck carrying a held order arrives?
+- Why can’t a database CHECK enforce the return limit?
+- Why does a transfer take the same lock as an order?
+Run these from the backend folder. The generated data changed, so regenerate and reload first:
+.\venv\Scripts\python.exe -m scripts.generate --scale starter --seed 20261022
+.\venv\Scripts\python.exe -m scripts.load_data --scale starter
+.\venv\Scripts\python.exe -m scripts.validate --scale starter
+.\venv\Scripts\python.exe -m pytest
+.\venv\Scripts\python.exe -m pytest tests/test_transfers.py tests/test_returns.py -v
+.\venv\Scripts\python.exe -m scripts.compare_runs --scale starter
+.\venv\Scripts\python.exe -m scripts.show_atp --sku SKU-000010 --channel WEB
+Run these from E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge. A dry run listed 27 files and no data files.
+git add docs prompt-history backend/app backend/db backend/generator backend/scripts backend/tests
+git status
+git commit -m "feat: add transfers, returns and shipping that waits for inbound stock"
+git push
+Transfers, returns and order waiting are built and tested: 353 tests pass and both scales pass 87 of 87 checks. Nothing is committed. Generated orders and late-truck handling for waiting orders are still unbuilt, as listed in STATUS.md.
+Do you approve Step 4: generated orders and late-truck handling?

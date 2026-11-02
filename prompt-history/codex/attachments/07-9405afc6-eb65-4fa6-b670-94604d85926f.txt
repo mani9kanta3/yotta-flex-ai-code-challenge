@@ -1,0 +1,68 @@
+All four anomalies and their decoys are in, with exact totals at both scales, and every validation failure is explained by a labelled record. Your last commit is still Step 3, so Step 4 is uncommitted too. I saved a snapshot of it first, so you can still commit the two steps separately (commands below).
+No failures are hidden. scripts.validate still exits 1 on the final data. A separate command, eval.check_failures, compares those failures with the ground truth and calls one expected only if labelled records explain its exact count. Anything else counts as unexpected and makes that command exit 1, including a labelled problem the validator missed.
+
+The expected failures at full scale are 50 each:
+- closing balance doesn’t reconcile
+- network total differs
+- hold above what could be promised
+- sale from blocked stock
+- transfer received before it shipped
+Starter’s sixth failure is the decision sample landing on one labelled order, whose logged decision is stale on purpose.
+The detectors find nothing on the clean baseline. Don’t read 1.0 as real-world accuracy: I wrote both the anomalies and the detectors, so it only shows the two are consistent.
+At full scale, only 200 decisions were checked against SQL: 200 of 72,139 on the clean baseline and 200 of 72,339 on the final data. The rest haven’t been recalculated, and the validator output and STATUS.md both say so. I also fixed the sample, which could land slightly above 200.
+
+Every decision was checked at starter scale: all 1,443 on the clean baseline agree, and of all 1,463 on the final data, only the 5 labelled ones differ.
+- Same seed twice: all 39 exported files are identical at both scales, including the clean baseline, manifests and ground truth.
+- Only the intended problem: every clean movement and order is still in the final data unchanged, and at starter scale every new movement belongs to a labelled case.
+- Tests and bugs: 577 tests pass, and all 92 deliberate bugs are caught. The first pass caught 90: one miss was a real test gap, now fixed, and the other was a script glitch that a direct rerun caught.
+- Fresh clone: committed data keeps its checksums after a clone on Windows settings, thanks to a new .gitattributes.
+- Dates gave anomalies away: injected orders sat about 95% of the way through the data. They now sit around the middle (median 0.45 for anomalies, 0.41 for decoys at full scale). To make room, half of the SKUs stop getting online orders at a random date.
+- Moving a late hold depended on luck: one run had none. The NDC (national warehouse) now rushes a delivery in half the time, so full scale has 159 moved holds.
+- Line endings: Git on Windows would have changed the committed data files and broken their checksums.
+I couldn’t find a misspelled test command, so I fixed the two faults I did find:
+- Python path: my commands used .\venv\Scripts\python.exe in bash blocks, where backslashes break. They now use forward slashes, and I confirmed that form works in both PowerShell and Git Bash.
+- Wrong file name: PLAN.md named a test file that doesn’t exist, test_schema.py. It now says test_database.py.
+If you meant a different typo, tell me which line.
+- Pattern in the cases: a labelled case is always on a SKU with no later online orders. No detector uses that, but a reader could spot it.
+- Settings chosen to fit cases: opening damaged stock went from 1% to 8% of stocked pairs (a SKU at a location). Late-truck rates are also set on purpose, so they say nothing about real carriers.
+- Other seeds: 19 of 20 placed every case at starter, and the other stopped with an error. One of those 19 had no late cancellation, which the validator would report as a failure. Only the default seed ran at full scale.
+- Small sample at starter: with 5 cases per type, dates can differ a lot by chance.
+- Changed from the plan: the ATP checkpoints aren’t written, because the decision recheck does that job. Detectors moved up from Step 8 because you asked for scores now.
+- inject.py: the opening rules, try_blocked and renumber.
+- detect.py: RESERVATION_SQL.
+- check_failures.py: classify.
+- settings.py: clean_scale.
+An interviewer may ask
+- Why can’t a case go on a SKU with later orders?
+- Why does the validator not read the ground truth?
+- Why is 1.0 not proof the detectors work in the real world?
+- Why renumber everything after injection?
+- What do decoys prove that recall doesn’t?
+Run these from the backend folder. They generate the data and show the clean baseline passing:
+./venv/Scripts/python.exe -m scripts.generate --scale starter --seed 20261022
+./venv/Scripts/python.exe -m scripts.load_data --scale starter --clean
+./venv/Scripts/python.exe -m scripts.validate --scale starter --clean
+Then the final data. The validate command should exit 1 here, and check_failures should exit 0:
+./venv/Scripts/python.exe -m scripts.load_data --scale starter
+./venv/Scripts/python.exe -m scripts.validate --scale starter
+./venv/Scripts/python.exe -m eval.check_failures --scale starter
+./venv/Scripts/python.exe -m scripts.run_detect
+./venv/Scripts/python.exe -m eval.score --scale starter
+All tests take about 7.5 minutes, and the full-scale comparison about 4:
+./venv/Scripts/python.exe -m pytest
+./venv/Scripts/python.exe -m scripts.compare_runs --scale starter
+./venv/Scripts/python.exe -m scripts.compare_runs --scale full
+Run these from E:\Full Stack and AI\Assisgnments\Yotta Flex AI Challenge. I ran this sequence on a throwaway clone: 24 files in Step 4, 48 in Step 5, and no full-scale data. Warnings about LF and CRLF are harmless.
+
+Step 4, from the snapshot:
+git -C .step4_snapshot --git-dir=../.git --work-tree=. add -A docs prompt-history backend/app backend/db backend/generator backend/scripts backend/tests
+git commit -m "feat: generate online orders and handle late trucks without double reserving"
+Step 5, including the starter data:
+git add .gitignore .gitattributes docs prompt-history backend/app backend/db backend/eval backend/generator backend/scripts backend/tests backend/data/starter backend/data/ground_truth/starter
+git status
+git commit -m "feat: inject labelled anomalies with decoys, keep ground truth apart and score detectors"
+git push
+Then delete the snapshot:
+rm -rf .step4_snapshot
+Step 5 is built and verified: labelled anomalies, decoys, separate ground truth, detectors and scoring, with exact totals at both scales. Nothing is committed, and Step 4 is still uncommitted too. At full scale, only 200 decisions were checked against SQL.
+Do you approve Step 6: data dictionary and manifest review?

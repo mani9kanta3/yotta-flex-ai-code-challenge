@@ -96,6 +96,7 @@ Also from the review's other notes:
 - The traceable badge now checks that the sale matches its hold's SKU, location and quantity.
 - Two new checks fail if rule or buffer versions overlap.
 - The review's break scenarios 8 to 12 now have tests. Scenario 12 records that a repeated request places another order.
+- A later check found the F4 fix had missed balance dates: a snapshot changed from 2026 to 2099 reported no problems. Every balance must now keep its date and ID, including on a SKU with a case, and a repeated balance row fails too. The new tests failed before the fix.
 
 **Still open from the review:**
 
@@ -132,7 +133,7 @@ Seed 20261022. The final data includes the labelled problems and decoys.
 
 The full-scale run shared the machine with a test run, so those times are on the slow side.
 
-All 865 tests pass with no skips, from a fresh clone with an empty database, using only the README's commands.
+All 872 tests pass with no skips, from a fresh clone plus the balance date fix, with an empty separate database, using only the README's commands.
 
 **Validation**
 
